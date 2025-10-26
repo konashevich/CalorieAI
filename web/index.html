@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2196F3">
+    <title>CalorieAI - AI-Powered Calorie Tracking</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    
+    <!-- Theme detection -->
+    <script>
+        // Detect OS theme preference
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+        }
+        
+        // Listen for theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+        });
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <h1 class="app-title">CalorieAI</h1>
+            <button id="installBtn" class="install-btn" style="display: none;">Install App</button>
+            <button id="headerMenuBtn" class="header-menu-btn" aria-label="Open menu">⋮</button>
+            <div id="headerMenu" class="header-menu" aria-hidden="true">
+                <button id="headerSettingsBtn" class="header-menu-item">Settings</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Record Page -->
+            <section id="record-page" class="page active">
+                <div class="page-header">
+                </div>
+                
+                <!-- Recording Section -->
+                <div class="recording-section">
+                    <div class="record-controls">
+                        <button id="recordBtn" class="record-btn" aria-label="Start Recording">
+                            <span class="record-icon">🎙️</span>
+                        </button>
+                        <div class="recording-status" id="recordingStatus">Tap to record</div>
+                        <div class="recording-timer" id="recordingTimer">00:00</div>
+                    </div>
+                    
+                    <div class="record-actions" id="recordActions" style="display: none;">
+                        <button id="stopBtn" class="action-btn stop">Stop</button>
+                        <button id="sendBtn" class="action-btn send">Send to AI</button>
+                    </div>
+                </div>
+
+                <!-- Demo Data Button removed -->
+
+                <!-- Records List -->
+                <div class="records-section">
+                    <div class="records-list" id="recordsList">
+                        <!-- Records will be populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Record Details Modal -->
+            <div class="modal" id="recordDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Recording Details</h3>
+                        <button class="modal-close" id="closeRecordModal">&times;</button>
+                    </div>
+                    <div class="modal-body" id="recordDetailsBody">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            </section>
+
+            <!-- Cook Page -->
+            <section id="cook-page" class="page">
+                <div class="page-header">
+                    <h2>Cooked Meals</h2>
+                    <div class="page-filters">
+                        <select id="mealDateFilter" class="date-filter" title="Filter meals by date">
+                            <option value="all">All Days</option>
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="week">This Week</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Meals List -->
+                <div class="meals-section">
+                    <div class="meals-list" id="mealsList">
+                        <!-- Meals will be populated by JavaScript -->
+                        <div class="empty-state">
+                            <p>No cooked meals yet. Record cooking activities to get started!</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Meal Details Modal -->
+            <div class="modal" id="mealDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="mealDetailsTitle">Meal Details</h3>
+                        <div class="modal-actions">
+                            <button class="action-btn edit" id="editMealBtn">✏️</button>
+                            <button class="action-btn delete" id="deleteMealBtn">🗑️</button>
+                            <button class="modal-close" id="closeMealModal">&times;</button>
+                        </div>
+                    </div>
+                    <div class="modal-body" id="mealDetailsBody">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Eat Page -->
+            <section id="eat-page" class="page">
+                <div class="page-header">
+                    <h2>Daily Calories</h2>
+                    <div class="date-navigation">
+                        <button id="prevDay" class="date-nav-btn">‹</button>
+                        <div class="selected-date" id="selectedDate"></div>
+                        <button id="nextDay" class="date-nav-btn">›</button>
+                    </div>
+                </div>
+                
+                <!-- Daily Summary -->
+                <div class="daily-summary">
+                    <div class="calorie-counter">
+                        <span class="calorie-amount" id="dailyCalories">0</span>
+                        <span class="calorie-unit">cal</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="calorieProgress"></div>
+                    </div>
+                </div>
+
+                <!-- Food Items List -->
+                <div class="food-section">
+                    <h3>Food Items</h3>
+                    <div class="food-list" id="foodList">
+                        <!-- Food items will be populated by JavaScript -->
+                        <div class="empty-state">
+                            <p>No food logged for this day. Start recording or add from cooked meals!</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Food Item Details Modal -->
+            <div class="modal" id="foodDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Food Item Details</h3>
+                        <button class="modal-close" id="closeFoodModal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="foodDetailsForm">
+                            <div class="form-group">
+                                <label for="foodName">Food Name</label>
+                                <input type="text" id="foodName" class="form-input" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="foodWeight">Weight</label>
+                                    <input type="number" id="foodWeight" class="form-input" min="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="foodUnit">Unit</label>
+                                    <select id="foodUnit" class="form-input" title="Weight unit">
+                                        <option value="grams">grams</option>
+                                        <option value="kg">kg</option>
+                                        <option value="oz">oz</option>
+                                        <option value="lbs">lbs</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="foodCalories">Calories</label>
+                                <input type="number" id="foodCalories" class="form-input" min="0" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="foodDate">Date</label>
+                                    <input type="date" id="foodDate" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="foodTime">Time</label>
+                                    <input type="time" id="foodTime" class="form-input" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="foodSource">Source</label>
+                                <select id="foodSource" class="form-input" title="Data source" disabled>
+                                    <option value="audio">Voice Recording</option>
+                                    <option value="cooking">Cooked Meal</option>
+                                    <option value="manual">Manual Entry</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="action-btn secondary" id="cancelFoodEdit">Cancel</button>
+                                <button type="submit" class="action-btn primary">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clarification Modal -->
+            <div class="modal" id="clarificationModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Additional Information Needed</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p id="clarificationMessage">We need more information to process your recording.</p>
+                        <div id="clarificationForm">
+                            <!-- Dynamic form fields will be added here -->
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="action-btn secondary" id="skipClarification">Skip</button>
+                            <button type="button" class="action-btn primary" id="submitClarification">Submit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings Modal -->
+        <div class="modal" id="settingsModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <span class="modal-close" id="closeSettingsModal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <form id="settingsForm">
+                        <div class="form-group">
+                            <label for="geminiApiKey">Gemini API Key</label>
+                            <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key">
+                            <small class="form-help">
+                                Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>
+                            </small>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="action-btn secondary" id="clearApiKey">Clear Key</button>
+                            <button type="submit" class="action-btn primary">Save Settings</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-page="record">
+                <span class="nav-icon">🎙️</span>
+                <span class="nav-label">Record</span>
+            </button>
+            <button class="nav-btn" data-page="cook">
+                <span class="nav-icon">👨‍🍳</span>
+                <span class="nav-label">Cook</span>
+            </button>
+            <button class="nav-btn" data-page="eat">
+                <span class="nav-icon">🍽️</span>
+                <span class="nav-label">Eat</span>
+            </button>
+            <!-- Settings moved to header menu -->
+        </nav>
+    </div>
+
+    <!-- Protocol Warning -->
+    <div class="protocol-warning" id="protocolWarning" style="display: none;">
+        <div class="warning-content">
+            <h3>⚠️ Limited Functionality</h3>
+            <p>For full features including voice recording and PWA capabilities, please run:</p>
+            <code>python -m http.server 8000</code>
+            <p>Then visit: <a href="http://localhost:8000">http://localhost:8000</a></p>
+            <button onclick="document.getElementById('protocolWarning').style.display='none'">Continue Anyway</button>
+        </div>
+    </div>
+
+    <!-- Toasts -->
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing with AI...</div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="js/indexeddb.js"></script>
+    <script src="js/pwa.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/gemini-ai.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="js/app.js"></script>
+    
+    <script>
+        // Check protocol and show warning if needed
+        if (window.location.protocol === 'file:') {
+            document.getElementById('protocolWarning').style.display = 'flex';
+        }
+
+        function generateDemo() {
+            if (confirm('This will replace all existing data with demo data. Continue?')) {
+                if (window.app && window.app.storage) {
+                    window.app.storage.generateSampleData();
+                    window.app.refreshAllPages();
+                    alert('Demo data loaded! Check all three pages to see the features.');
+                } else {
+                    alert('App not ready yet. Please try again in a moment.');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
