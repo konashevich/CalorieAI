@@ -445,8 +445,15 @@ class StorageManager {
 
     // Data export/import for backup
     exportData() {
-        // Export all data EXCEPT audio recordings
+        // Export all data including audio record metadata (exclude blob data)
+        const audioRecords = this.getAudioRecords().map(record => {
+            // Clone record without blob/binary data
+            const { blob, ...metadataOnly } = record;
+            return metadataOnly;
+        });
+
         const data = {
+            audioRecords: audioRecords,
             cookingRecords: this.getCookingRecords(),
             ingredients: this.getIngredients(),
             eatingRecords: this.getEatingRecords(),
@@ -454,7 +461,7 @@ class StorageManager {
             meta: {
                 exportDate: new Date().toISOString(),
                 version: '1.0.0',
-                audioExcluded: true
+                audioBlobsExcluded: true
             }
         };
         return JSON.stringify(data, null, 2);
@@ -464,7 +471,10 @@ class StorageManager {
         try {
             const data = JSON.parse(jsonData);
             
-            // Intentionally ignore audioRecords if present in backup
+            // Import audio record metadata (without blob data)
+            if (data.audioRecords) {
+                this.setData(this.storageKeys.AUDIO_RECORDS, data.audioRecords);
+            }
             if (data.cookingRecords) {
                 this.setData(this.storageKeys.COOKING_RECORDS, data.cookingRecords);
             }

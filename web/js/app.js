@@ -137,9 +137,9 @@ class CalorieAIApp {
             }
         });
 
-        // Import data (JSON file picker, excludes audio records by design)
+        // Import data (JSON file picker, excludes audio blobs by design)
         headerImportBtn?.addEventListener('click', async () => {
-            if (!confirm('Importing will replace current meals, foods, ingredients, and settings. Audio recordings are not affected. Continue?')) {
+            if (!confirm('Importing will replace current data (recordings metadata, meals, foods, ingredients, settings). Audio files are not included. Continue?')) {
                 return;
             }
             const input = document.createElement('input');
@@ -328,6 +328,8 @@ class RecordManager {
         this.storage = storage;
         this.getAIManager = getAIManager;
         this.recordsList = document.getElementById('recordsList');
+        this.selectedRecords = new Set();
+        this.selectionMode = false;
         this.setupModals();
     }
 
@@ -392,7 +394,15 @@ class RecordManager {
         if (records.length === 0) {
             // No records: leave the list empty (no placeholder text)
             this.recordsList.innerHTML = '';
+            this.hideSelectionBar();
             return;
+        }
+
+        // Show selection bar if in selection mode or has selected items
+        if (this.selectionMode || this.selectedRecords.size > 0) {
+            this.showSelectionBar();
+        } else {
+            this.hideSelectionBar();
         }
 
         // Group records by date
@@ -460,23 +470,28 @@ class RecordManager {
         const preview = hasTranscription ? this.getTranscriptionPreview(record) : '';
         const isComplete = this.isRecordComplete(record);
         const dateShort = this.formatShortDate(record.recordedDate);
+        const isSelected = this.selectedRecords.has(record.id);
+        const canSelect = !hasTranscription; // Only non-transcribed can be selected
 
         return `
-            <div class="record-item" data-record-id="${record.id}" oncontextmenu="window.app.recordManager.showContextMenu(event, '${record.id}')">
+            <div class="record-item ${isSelected ? 'selected' : ''}" data-record-id="${record.id}" 
+                 onclick="${canSelect ? `window.app.recordManager.toggleRecordSelection('${record.id}')` : ''}"
+                 oncontextmenu="window.app.recordManager.showContextMenu(event, '${record.id}')">
+                ${canSelect ? `<span class="selection-checkbox">${isSelected ? '☑' : '☐'}</span>` : ''}
                 <span class="record-date">${dateShort}</span>
                 <span class="status-checkbox ${isComplete ? 'complete' : 'incomplete'}" title="${isComplete ? 'Complete' : 'Incomplete'}">${isComplete ? '☑' : '☐'}</span>
-                <button class="btn-icon" onclick="window.app.recordManager.showRecordDetails('${record.id}')" title="Details" aria-label="Details">
+                <button class="btn-icon" onclick="event.stopPropagation(); window.app.recordManager.showRecordDetails('${record.id}')" title="Details" aria-label="Details">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
                         <path d="M9 0H3a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V5L9 0zm0 1l4 4H9V1z"/>
                     </svg>
                 </button>
-                <button class="btn-icon" onclick="window.app.recordManager.playRecord('${record.id}')" title="Play" aria-label="Play">
+                <button class="btn-icon" onclick="event.stopPropagation(); window.app.recordManager.playRecord('${record.id}')" title="Play" aria-label="Play">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
                         <path d="M4 2v12l9-6z"/>
                     </svg>
                 </button>
-                <span class="record-text" title="${preview.replace(/"/g, '&quot;')}">${preview}</span>
-                <button class="btn-icon" onclick="if(confirm('Delete this recording? This action cannot be undone.')) window.app.recordManager.deleteRecord('${record.id}')" title="Delete" aria-label="Delete">
+                <span class="record-text" title="${preview.replace(/"/g, '&quot;')}">${preview || 'Not transcribed yet'}</span>
+                <button class="btn-icon" onclick="event.stopPropagation(); if(confirm('Delete this recording? This action cannot be undone.')) window.app.recordManager.deleteRecord('${record.id}')" title="Delete" aria-label="Delete">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
                         <path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"/>
                         <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 1 1 0-2H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4 4v9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4H4zM6 2a.5.5 0 0 0-.5.5V3h5v-.5A.5.5 0 0 0 10 2H6z"/>
@@ -785,6 +800,134 @@ class RecordManager {
                 month: 'short', 
                 day: 'numeric' 
             });
+        }
+    }
+
+    toggleRecordSelection(recordId) {
+        if (this.selectedRecords.has(recordId)) {
+            this.selectedRecords.delete(recordId);
+        } else {
+            this.selectedRecords.add(recordId);
+        }
+        this.refreshRecordsList();
+    }
+
+    showSelectionBar() {
+        let bar = document.getElementById('batchSelectionBar');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'batchSelectionBar';
+            bar.className = 'batch-selection-bar';
+            bar.innerHTML = `
+                <span id="selectionCount">0 selected</span>
+                <button id="sendAllBtn" class="action-btn primary">Send All to AI</button>
+                <button id="clearSelectionBtn" class="action-btn secondary">Clear</button>
+            `;
+            const recordsSection = document.querySelector('.records-section');
+            if (recordsSection) {
+                recordsSection.insertBefore(bar, this.recordsList);
+            }
+            
+            document.getElementById('sendAllBtn')?.addEventListener('click', () => this.batchSendToAI());
+            document.getElementById('clearSelectionBtn')?.addEventListener('click', () => this.clearSelection());
+        }
+        
+        const count = this.selectedRecords.size;
+        const countEl = document.getElementById('selectionCount');
+        if (countEl) countEl.textContent = `${count} selected`;
+        
+        const sendBtn = document.getElementById('sendAllBtn');
+        if (sendBtn) sendBtn.disabled = count === 0;
+        
+        bar.style.display = 'flex';
+    }
+
+    hideSelectionBar() {
+        const bar = document.getElementById('batchSelectionBar');
+        if (bar) bar.style.display = 'none';
+    }
+
+    clearSelection() {
+        this.selectedRecords.clear();
+        this.selectionMode = false;
+        this.refreshRecordsList();
+    }
+
+    async batchSendToAI() {
+        if (this.selectedRecords.size === 0) return;
+
+        const recordIds = Array.from(this.selectedRecords);
+        const records = this.storage.getAudioRecords().filter(r => recordIds.includes(r.id));
+
+        if (!confirm(`Send ${records.length} recording(s) to AI for processing?`)) {
+            return;
+        }
+
+        try {
+            // Show loading overlay
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = document.querySelector('.loading-text');
+            if (overlay) overlay.classList.add('show');
+            if (loadingText) loadingText.textContent = `Processing 0 of ${records.length}...`;
+
+            const aiManager = this.getAIManager();
+            const audioDataArray = records.map(record => ({
+                blob: record.blob,
+                mimeType: record.mimeType || 'audio/webm',
+                recordId: record.id
+            }));
+
+            const batchResult = await aiManager.processBatchAudio(audioDataArray);
+
+            // Update records with results
+            let successCount = 0;
+            for (let i = 0; i < batchResult.results.length; i++) {
+                const result = batchResult.results[i];
+                const record = records[i];
+
+                if (loadingText) loadingText.textContent = `Processing ${i + 1} of ${records.length}...`;
+
+                if (result.success) {
+                    // Update record with transcription
+                    this.storage.updateAudioRecord(record.id, {
+                        transcribed: true,
+                        transcriptionData: JSON.stringify(result.data)
+                    });
+
+                    // Handle AI response and save to appropriate storage
+                    if (aiManager.handleAIResponse) {
+                        await aiManager.handleAIResponse(result.data, record.id);
+                    }
+
+                    successCount++;
+                }
+            }
+
+            // Hide loading overlay
+            if (overlay) overlay.classList.remove('show');
+
+            // Clear selection and refresh
+            this.clearSelection();
+            this.refreshRecordsList();
+
+            // Refresh other pages
+            if (window.app) {
+                window.app.refreshAllPages();
+            }
+
+            // Show result toast
+            const errorCount = records.length - successCount;
+            let message = `Processed ${successCount} of ${records.length} recordings`;
+            if (errorCount > 0) {
+                message += ` (${errorCount} failed)`;
+            }
+            window.app?.showToast(message, errorCount > 0 ? 'error' : 'success', 5000);
+
+        } catch (error) {
+            console.error('Batch processing error:', error);
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.classList.remove('show');
+            window.app?.showToast('Batch processing failed: ' + error.message, 'error');
         }
     }
 }

@@ -33,6 +33,34 @@ class GeminiAIManager {
     }
 
     /**
+     * Process multiple audio recordings in batch
+     * @param {Array<Object>} audioDataArray - Array of audio data objects
+     * @returns {Promise<Array<Object>>} - Array of AI responses
+     */
+    async processBatchAudio(audioDataArray) {
+        if (!this.isInitialized()) {
+            throw new Error('Gemini AI not initialized. Please configure your API key in Settings.');
+        }
+
+        const results = [];
+        const errors = [];
+
+        for (let i = 0; i < audioDataArray.length; i++) {
+            try {
+                console.log(`Processing audio ${i + 1} of ${audioDataArray.length}...`);
+                const result = await this.processAudio(audioDataArray[i]);
+                results.push({ index: i, success: true, data: result, audioData: audioDataArray[i] });
+            } catch (error) {
+                console.error(`Error processing audio ${i + 1}:`, error);
+                errors.push({ index: i, error: error.message, audioData: audioDataArray[i] });
+                results.push({ index: i, success: false, error: error.message });
+            }
+        }
+
+        return { results, errors, total: audioDataArray.length };
+    }
+
+    /**
      * Send audio to Gemini API for processing
      * @param {Object} audioData - Audio data with blob, mimeType, etc.
      * @returns {Promise<Object>} - AI response with transcription and food analysis
@@ -123,7 +151,7 @@ class GeminiAIManager {
     /**
      * Build comprehensive prompt for food analysis
      */
-        buildFoodAnalysisPrompt() {
+    buildFoodAnalysisPrompt() {
         const currentDate = new Date().toISOString().split('T')[0];
         const currentTime = new Date().toTimeString().split(' ')[0];
         
@@ -138,58 +166,62 @@ General requirements:
 - Determine activity_type: "cooking" (preparing) or "eating" (consuming)
 - Use 24-hour time
 - ALWAYS normalize quantities to grams for weight (weight_g):
-    - If user says tablespoons, teaspoons, cups, pieces, slices, etc., convert to grams using common nutrition approximations
-    - Do not return ranges; choose the single best estimate in grams
-    - Prefer providing calories_per_100g and compute total_calories
+  - If user says tablespoons, teaspoons, cups, pieces, slices, etc., convert to grams using common nutrition approximations
+  - Do not return ranges; choose the single best estimate in grams
+  - Prefer providing calories_per_100g and compute total_calories
 - If unclear/missing, set requires_clarification true and list clarification_needed
+- IMPORTANT: User may mention MULTIPLE food items or meals in one recording - capture ALL of them
 
 FOR COOKING, return this shape (ingredients MUST be separate and precise; do NOT include overall yield fields):
 {
-    "raw_transcription": string,
-    "cleaned_transcription": string,
-    "activity_type": "cooking",
-    "confidence_level": "high"|"medium"|"low",
-    "requires_clarification": boolean,
-    "clarification_needed": string[],
-    "date": "${currentDate}",
-    "time": "${currentTime}",
-    "meal_name": string,
-        "ingredients": [
+  "raw_transcription": string,
+  "cleaned_transcription": string,
+  "activity_type": "cooking",
+  "confidence_level": "high"|"medium"|"low",
+  "requires_clarification": boolean,
+  "clarification_needed": string[],
+  "date": "${currentDate}",
+  "time": "${currentTime}",
+  "meals": [
+    {
+      "meal_name": string,
+      "ingredients": [
         {
-            "name": string,
-            "weight_g": number,              // grams
-            "calories_per_100g": number,     // preferred; use realistic values
-            "total_calories": number         // optional; if both provided, they must be consistent
+          "name": string,
+          "weight_g": number,              // grams
+          "calories_per_100g": number,     // preferred; use realistic values
+          "total_calories": number         // optional; if both provided, they must be consistent
         }
-    ],
-    "missing_data": string[],
-    "status": "complete"|"needs_clarification"
+      ]
+    }
+  ],
+  "missing_data": string[],
+  "status": "complete"|"needs_clarification"
 }
 
-FOR EATING, return this shape:
+FOR EATING, return this shape (support multiple food items):
 {
-    "raw_transcription": string,
-    "cleaned_transcription": string,
-    "activity_type": "eating",
-    "confidence_level": "high"|"medium"|"low",
-    "requires_clarification": boolean,
-    "clarification_needed": string[],
-    "date": "${currentDate}",
-    "time": "${currentTime}",
-    "foods": [
-        { "name": string, "weight": number, "unit": "grams", "total_calories": number }
-    ],
-    "missing_data": string[],
-    "status": "complete"|"needs_clarification"
+  "raw_transcription": string,
+  "cleaned_transcription": string,
+  "activity_type": "eating",
+  "confidence_level": "high"|"medium"|"low",
+  "requires_clarification": boolean,
+  "clarification_needed": string[],
+  "date": "${currentDate}",
+  "time": "${currentTime}",
+  "foods": [
+    { "name": string, "weight": number, "unit": "grams", "total_calories": number }
+  ],
+  "missing_data": string[],
+  "status": "complete"|"needs_clarification"
 }
 
 Rules:
 - Use realistic calorie values. Prefer to provide calories_per_100g for ingredients and compute totals.
 - If any weight/calories are ambiguous, set requires_clarification and add specific clarification_needed items.
-                `.trim();
-    }
-
-    /**
+- If user mentions multiple meals/foods, include ALL of them in the respective arrays (meals[] or foods[])
+        `.trim();
+    }    /**
      * Parse Gemini's response and validate format
      */
     parseGeminiResponse(responseText) {
@@ -278,10 +310,12 @@ Return ONLY valid JSON with the same structure as specified previously.
         }
 
         if (response.activity_type === 'cooking') {
+            // Support both old (single meal with ingredients) and new (meals array) formats
             const hasTopIngredients = Array.isArray(response.ingredients);
+            const hasMealsArray = Array.isArray(response.meals);
             const hasFoodsIngredients = Array.isArray(response.foods) && response.foods.some(f => Array.isArray(f.ingredients));
-            if (!hasTopIngredients && !hasFoodsIngredients) {
-                throw new Error('Cooking response must include ingredients');
+            if (!hasTopIngredients && !hasMealsArray && !hasFoodsIngredients) {
+                throw new Error('Cooking response must include ingredients or meals array');
             }
         }
 
@@ -313,66 +347,86 @@ Return ONLY valid JSON with the same structure as specified previously.
     async processCookingResponse(response, audioRecordId) {
         const storage = window.app.storage;
         
-        // Normalize ingredients from either top-level or foods[].ingredients
-        let ingredients = [];
-        if (Array.isArray(response.ingredients)) {
-            ingredients = response.ingredients;
+        // Support both old single-meal and new multi-meal formats
+        let mealsToProcess = [];
+        
+        if (Array.isArray(response.meals)) {
+            // New format: meals array
+            mealsToProcess = response.meals;
+        } else if (Array.isArray(response.ingredients) || response.meal_name) {
+            // Old format: single meal with top-level ingredients
+            mealsToProcess = [{
+                meal_name: response.meal_name || 'Cooked Meal',
+                ingredients: response.ingredients || []
+            }];
         } else if (Array.isArray(response.foods)) {
+            // Legacy format: foods with ingredients
             response.foods.forEach(f => {
-                if (Array.isArray(f.ingredients)) ingredients.push(...f.ingredients);
+                if (Array.isArray(f.ingredients)) {
+                    mealsToProcess.push({
+                        meal_name: f.name || 'Cooked Meal',
+                        ingredients: f.ingredients
+                    });
+                }
             });
         }
 
-        // Map to unified shape and compute per-ingredient calories if needed
-        const normIngredients = ingredients.map(ing => {
-            const weight = ing.weight_g ?? ing.weight ?? 0;
-            const cals100 = ing.calories_per_100g ?? ing.caloriesPer100g;
-            let total = ing.total_calories ?? ing.totalCalories;
-            let per100 = cals100;
-            if ((total == null || isNaN(total)) && per100 != null) {
-                total = Math.round((Number(weight) || 0) * Number(per100) / 100);
-            } else if ((per100 == null || isNaN(per100)) && total != null && weight) {
-                per100 = Math.round((Number(total) * 100) / Number(weight));
-            }
-            return {
-                name: ing.name,
-                weight: Number(weight) || 0,
-                caloriesPer100g: Number(per100) || 0,
-                totalCalories: Math.round(Number(total) || 0)
-            };
-        });
+        const cookingRecords = [];
 
-    // Compute totals EXCLUSIVELY from ingredients (ignore any provided yield/overall totals)
-    const totalWeight = normIngredients.reduce((s, i) => s + (Number(i.weight) || 0), 0);
-    const totalCalories = normIngredients.reduce((s, i) => s + (Number(i.totalCalories) || 0), 0);
-
-        // Create cooking record
-        const cookingData = {
-            mealName: response.meal_name || response.foods?.[0]?.name || 'Cooked Meal',
-            totalWeight: Math.round(totalWeight) || 0,
-            totalCalories: Math.round(totalCalories) || 0,
-            cookedDate: response.date,
-            cookedTime: response.time,
-            audioRecordId: audioRecordId,
-            // Include ingredient names for preview convenience
-            ingredients: normIngredients.map(i => i.name).slice(0, 6)
-        };
-        const cookingRecord = storage.addCookingRecord(cookingData);
-
-        // Persist ingredients
-        normIngredients.forEach(ing => {
-            storage.addIngredient({
-                cookingRecordId: cookingRecord.id,
-                name: ing.name,
-                weight: ing.weight,
-                caloriesPer100g: ing.caloriesPer100g
+        for (const meal of mealsToProcess) {
+            const ingredients = meal.ingredients || [];
+            
+            // Map to unified shape and compute per-ingredient calories if needed
+            const normIngredients = ingredients.map(ing => {
+                const weight = ing.weight_g ?? ing.weight ?? 0;
+                const cals100 = ing.calories_per_100g ?? ing.caloriesPer100g;
+                let total = ing.total_calories ?? ing.totalCalories;
+                let per100 = cals100;
+                if ((total == null || isNaN(total)) && per100 != null) {
+                    total = Math.round((Number(weight) || 0) * Number(per100) / 100);
+                } else if ((per100 == null || isNaN(per100)) && total != null && weight) {
+                    per100 = Math.round((Number(total) * 100) / Number(weight));
+                }
+                return {
+                    name: ing.name,
+                    weight: Number(weight) || 0,
+                    caloriesPer100g: Number(per100) || 0,
+                    totalCalories: Math.round(Number(total) || 0)
+                };
             });
-        });
 
-        return { type: 'cooking', record: cookingRecord };
-    }
+            // Compute totals EXCLUSIVELY from ingredients (ignore any provided yield/overall totals)
+            const totalWeight = normIngredients.reduce((s, i) => s + (Number(i.weight) || 0), 0);
+            const totalCalories = normIngredients.reduce((s, i) => s + (Number(i.totalCalories) || 0), 0);
 
-    async processEatingResponse(response, audioRecordId) {
+            // Create cooking record
+            const cookingData = {
+                mealName: meal.meal_name || 'Cooked Meal',
+                totalWeight: Math.round(totalWeight) || 0,
+                totalCalories: Math.round(totalCalories) || 0,
+                cookedDate: response.date,
+                cookedTime: response.time,
+                audioRecordId: audioRecordId,
+                // Include ingredient names for preview convenience
+                ingredients: normIngredients.map(i => i.name).slice(0, 6)
+            };
+            const cookingRecord = storage.addCookingRecord(cookingData);
+
+            // Persist ingredients
+            normIngredients.forEach(ing => {
+                storage.addIngredient({
+                    cookingRecordId: cookingRecord.id,
+                    name: ing.name,
+                    weight: ing.weight,
+                    caloriesPer100g: ing.caloriesPer100g
+                });
+            });
+
+            cookingRecords.push(cookingRecord);
+        }
+
+        return { type: 'cooking', records: cookingRecords };
+    }    async processEatingResponse(response, audioRecordId) {
         const storage = window.app.storage;
         
         // Create eating records for each food

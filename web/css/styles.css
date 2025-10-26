@@ -552,6 +552,80 @@ body {
     line-height: 1.2;
 }
 
+/* Selection Checkbox */
+.selection-checkbox {
+    font-size: 1.2rem;
+    line-height: 1;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.record-item.selected {
+    background-color: var(--hover-bg);
+    border-left: 3px solid var(--accent-primary);
+    padding-left: calc(0.75rem - 3px);
+}
+
+/* Batch Selection Bar */
+.batch-selection-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.batch-selection-bar #selectionCount {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.batch-selection-bar .action-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.batch-selection-bar .action-btn.primary {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.batch-selection-bar .action-btn.primary:hover:not(:disabled) {
+    background: var(--accent-primary-dark);
+}
+
+.batch-selection-bar .action-btn.primary:disabled {
+    background: var(--text-secondary);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.batch-selection-bar .action-btn.secondary {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.batch-selection-bar .action-btn.secondary:hover {
+    background: var(--hover-bg);
+}
+
 /* Compact Food Items (single-line like records) */
 .food-item.compact {
     display: flex;
