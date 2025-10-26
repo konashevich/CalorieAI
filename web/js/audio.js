@@ -20,7 +20,8 @@ class AudioManager {
             sendBtn: document.getElementById('sendBtn'),
             recordingStatus: document.getElementById('recordingStatus'),
             recordingTimer: document.getElementById('recordingTimer'),
-            recordActions: document.getElementById('recordActions')
+            recordActions: document.getElementById('recordActions'),
+            recordingSection: document.querySelector('.recording-section')
         };
 
         // Debug: Check if elements exist
@@ -327,6 +328,17 @@ class AudioManager {
             this.elements.recordBtn.classList.add('recording');
             this.elements.recordBtn.innerHTML = '<span class="record-icon">⏹️</span>';
             this.updateStatus('Recording... Click to stop');
+
+            // Mark section as recording and reveal timer/status
+            if (this.elements.recordingSection) {
+                this.elements.recordingSection.classList.add('recording');
+            }
+            if (this.elements.recordingTimer) {
+                this.elements.recordingTimer.style.display = 'block';
+            }
+            if (this.elements.recordingStatus) {
+                this.elements.recordingStatus.style.display = 'block';
+            }
             
             if (this.elements.recordActions) {
                 this.elements.recordActions.style.display = 'flex';
@@ -340,6 +352,14 @@ class AudioManager {
             // Stopped state
             this.elements.recordBtn.classList.remove('recording');
             this.elements.recordBtn.innerHTML = '<span class="record-icon">🎙️</span>';
+            // Exit recording visual state; keep status visibility controlled by other flows
+            if (this.elements.recordingSection) {
+                this.elements.recordingSection.classList.remove('recording');
+            }
+            if (this.elements.recordingTimer) {
+                this.elements.recordingTimer.style.display = 'none';
+                this.elements.recordingTimer.textContent = '';
+            }
             
             // Don't hide record actions immediately - wait for processRecording to complete
             // The processRecording method will handle showing the send button
@@ -349,8 +369,18 @@ class AudioManager {
     resetRecordingUI() {
         this.elements.recordBtn.classList.remove('recording');
         this.elements.recordBtn.innerHTML = '<span class="record-icon">🎙️</span>';
-        this.updateStatus('Tap to record');
-        this.updateTimer('00:00');
+        // Idle state: no helper text or timer visible
+        this.updateStatus('');
+        this.updateTimer('');
+        if (this.elements.recordingSection) {
+            this.elements.recordingSection.classList.remove('recording');
+        }
+        if (this.elements.recordingStatus) {
+            this.elements.recordingStatus.style.display = 'none';
+        }
+        if (this.elements.recordingTimer) {
+            this.elements.recordingTimer.style.display = 'none';
+        }
         
         if (this.elements.recordActions) {
             this.elements.recordActions.style.display = 'none';
@@ -393,13 +423,17 @@ class AudioManager {
 
     updateStatus(message) {
         if (this.elements.recordingStatus) {
-            this.elements.recordingStatus.textContent = message;
+            this.elements.recordingStatus.textContent = message || '';
+            // Auto-toggle visibility based on message presence
+            this.elements.recordingStatus.style.display = message ? 'block' : 'none';
         }
     }
 
     updateTimer(timeString) {
         if (this.elements.recordingTimer) {
-            this.elements.recordingTimer.textContent = timeString;
+            this.elements.recordingTimer.textContent = timeString || '';
+            // Only show timer during active recording
+            this.elements.recordingTimer.style.display = this.isRecording ? 'block' : 'none';
         }
     }
 

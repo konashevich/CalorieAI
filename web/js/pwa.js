@@ -9,6 +9,7 @@ class PWAManager {
         this.isInstalled = false;
         this.registration = null;
         this.indexedDB = new IndexedDBManager();
+        this.updateButton = null;
         
         this.init();
     }
@@ -48,6 +49,14 @@ class PWAManager {
                             }
                         });
                     }
+                });
+
+                // When controller changes (new SW takes control), reload and/or clear update UI
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    // Hide the update button if present
+                    this.hideUpdateButton();
+                    // Force reload to load fresh assets
+                    window.location.reload();
                 });
                 
             } catch (error) {
@@ -302,20 +311,72 @@ class PWAManager {
     }
 
     showUpdateAvailable() {
-        const updateButton = document.createElement('button');
-        updateButton.className = 'update-btn';
-        updateButton.innerHTML = '🔄 Update Available';
-        updateButton.addEventListener('click', () => this.updateApp());
-        
+        if (this.updateButton && document.body.contains(this.updateButton)) {
+            return; // already shown
+        }
+        this.updateButton = document.createElement('button');
+        this.updateButton.className = 'update-btn';
+        this.updateButton.innerHTML = '🔄 Update Available';
+        this.updateButton.addEventListener('click', () => this.updateApp());
         const header = document.querySelector('.app-header');
-        if (header) {
-            header.appendChild(updateButton);
+        if (header) header.appendChild(this.updateButton);
+    }
+
+    hideUpdateButton() {
+        if (this.updateButton && this.updateButton.parentNode) {
+            this.updateButton.parentNode.removeChild(this.updateButton);
+            this.updateButton = null;
+        } else {
+            const btn = document.querySelector('.update-btn');
+            if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
         }
     }
 
     async updateApp() {
-        if (this.registration && this.registration.waiting) {
-            this.registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        try {
+            if (!this.registration) {
+                await this.registerServiceWorker();
+            }
+
+            // Disable UI to prevent double clicks
+            if (this.updateButton) {
+                this.updateButton.disabled = true;
+                this.updateButton.textContent = 'Updating…';
+            }
+
+            const sendSkipWaiting = (worker) => {
+                if (!worker) return false;
+                try {
+                    worker.postMessage({ type: 'SKIP_WAITING' });
+                    return true;
+                } catch (e) { return false; }
+            };
+
+            if (this.registration.waiting) {
+                // Ask waiting worker to activate
+                sendSkipWaiting(this.registration.waiting);
+                return;
+            }
+
+            if (this.registration.installing) {
+                // Wait until it’s installed then skip waiting
+                const installing = this.registration.installing;
+                installing.addEventListener('statechange', () => {
+                    if (installing.state === 'installed') {
+                        sendSkipWaiting(this.registration.waiting);
+                    }
+                });
+                return;
+            }
+
+            // No waiting/installing worker; try to check for updates
+            await this.registration.update();
+            // If an update is found, updatefound will trigger and show the button again
+            // As a fallback, reload after short delay
+            setTimeout(() => { window.location.reload(); }, 500);
+        } catch (err) {
+            console.warn('PWA: updateApp error', err);
+            // As a last resort, reload
             window.location.reload();
         }
     }

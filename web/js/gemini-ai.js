@@ -123,64 +123,70 @@ class GeminiAIManager {
     /**
      * Build comprehensive prompt for food analysis
      */
-    buildFoodAnalysisPrompt() {
+        buildFoodAnalysisPrompt() {
         const currentDate = new Date().toISOString().split('T')[0];
         const currentTime = new Date().toTimeString().split(' ')[0];
         
         return `
-Please analyze this audio recording for food-related information and return a JSON response.
+Please analyze this audio recording and return ONLY valid JSON for food tracking.
 
 Current date: ${currentDate}
 Current time: ${currentTime}
 
-Requirements:
-1. Provide exact transcription
-2. Determine if this is "cooking" (preparing/making food) or "eating" (consuming food)
-3. Extract all food items mentioned with weights/quantities
-4. Calculate calories for each food item
-5. Parse any date/time references (today, yesterday, lunch, etc.)
-6. If information is missing or unclear, mark requires_clarification as true
+General requirements:
+- Provide the exact transcription (raw_transcription)
+- Determine activity_type: "cooking" (preparing) or "eating" (consuming)
+- Use 24-hour time
+- ALWAYS normalize quantities to grams for weight (weight_g):
+    - If user says tablespoons, teaspoons, cups, pieces, slices, etc., convert to grams using common nutrition approximations
+    - Do not return ranges; choose the single best estimate in grams
+    - Prefer providing calories_per_100g and compute total_calories
+- If unclear/missing, set requires_clarification true and list clarification_needed
 
-Return ONLY valid JSON in this exact format:
+FOR COOKING, return this shape (ingredients MUST be separate and precise; do NOT include overall yield fields):
 {
-    "raw_transcription": "exact transcription here",
-    "cleaned_transcription": "food-related words only",
-    "activity_type": "cooking" or "eating" or null,
-    "confidence_level": "high" or "medium" or "low",
-    "requires_clarification": true or false,
-    "clarification_needed": ["specific questions if needed"],
+    "raw_transcription": string,
+    "cleaned_transcription": string,
+    "activity_type": "cooking",
+    "confidence_level": "high"|"medium"|"low",
+    "requires_clarification": boolean,
+    "clarification_needed": string[],
+    "date": "${currentDate}",
+    "time": "${currentTime}",
+    "meal_name": string,
+        "ingredients": [
+        {
+            "name": string,
+            "weight_g": number,              // grams
+            "calories_per_100g": number,     // preferred; use realistic values
+            "total_calories": number         // optional; if both provided, they must be consistent
+        }
+    ],
+    "missing_data": string[],
+    "status": "complete"|"needs_clarification"
+}
+
+FOR EATING, return this shape:
+{
+    "raw_transcription": string,
+    "cleaned_transcription": string,
+    "activity_type": "eating",
+    "confidence_level": "high"|"medium"|"low",
+    "requires_clarification": boolean,
+    "clarification_needed": string[],
     "date": "${currentDate}",
     "time": "${currentTime}",
     "foods": [
-        {
-            "name": "food name",
-            "weight": 100,
-            "unit": "grams",
-            "calories_per_100g": 165,
-            "total_calories": 165,
-            "ingredients": [
-                {
-                    "name": "ingredient name",
-                    "weight": 100,
-                    "calories": 165
-                }
-            ]
-        }
+        { "name": string, "weight": number, "unit": "grams", "total_calories": number }
     ],
-    "meal_name": "descriptive meal name",
-    "total_weight": 100,
-    "total_calories": 165,
-    "missing_data": ["list any missing information"],
-    "status": "complete" or "needs_clarification"
+    "missing_data": string[],
+    "status": "complete"|"needs_clarification"
 }
 
-Important:
-- Use realistic calorie values from nutrition databases
-- If weights are unclear, ask for clarification
-- If activity type is unclear, ask for clarification
-- Include all ingredients if cooking
-- Be precise with measurements and calories
-        `.trim();
+Rules:
+- Use realistic calorie values. Prefer to provide calories_per_100g for ingredients and compute totals.
+- If any weight/calories are ambiguous, set requires_clarification and add specific clarification_needed items.
+                `.trim();
     }
 
     /**
@@ -263,28 +269,26 @@ Return ONLY valid JSON with the same structure as specified previously.
      * Validate AI response format
      */
     validateAIResponse(response) {
-        const required = [
-            'raw_transcription',
-            'activity_type',
-            'foods',
-            'date',
-            'status'
-        ];
-
-        for (let field of required) {
+        // Required for both
+        const baseReq = ['raw_transcription', 'activity_type', 'date', 'status'];
+        for (let field of baseReq) {
             if (!(field in response)) {
                 throw new Error(`AI response missing required field: ${field}`);
             }
         }
 
-        // Validate activity_type
-        if (response.activity_type !== null && !['cooking', 'eating'].includes(response.activity_type)) {
-            throw new Error('Invalid activity_type in AI response');
+        if (response.activity_type === 'cooking') {
+            const hasTopIngredients = Array.isArray(response.ingredients);
+            const hasFoodsIngredients = Array.isArray(response.foods) && response.foods.some(f => Array.isArray(f.ingredients));
+            if (!hasTopIngredients && !hasFoodsIngredients) {
+                throw new Error('Cooking response must include ingredients');
+            }
         }
 
-        // Validate foods array
-        if (!Array.isArray(response.foods)) {
-            throw new Error('Foods must be an array');
+        if (response.activity_type === 'eating') {
+            if (!Array.isArray(response.foods)) {
+                throw new Error('Eating response must include foods array');
+            }
         }
 
         return response;
@@ -309,34 +313,61 @@ Return ONLY valid JSON with the same structure as specified previously.
     async processCookingResponse(response, audioRecordId) {
         const storage = window.app.storage;
         
+        // Normalize ingredients from either top-level or foods[].ingredients
+        let ingredients = [];
+        if (Array.isArray(response.ingredients)) {
+            ingredients = response.ingredients;
+        } else if (Array.isArray(response.foods)) {
+            response.foods.forEach(f => {
+                if (Array.isArray(f.ingredients)) ingredients.push(...f.ingredients);
+            });
+        }
+
+        // Map to unified shape and compute per-ingredient calories if needed
+        const normIngredients = ingredients.map(ing => {
+            const weight = ing.weight_g ?? ing.weight ?? 0;
+            const cals100 = ing.calories_per_100g ?? ing.caloriesPer100g;
+            let total = ing.total_calories ?? ing.totalCalories;
+            let per100 = cals100;
+            if ((total == null || isNaN(total)) && per100 != null) {
+                total = Math.round((Number(weight) || 0) * Number(per100) / 100);
+            } else if ((per100 == null || isNaN(per100)) && total != null && weight) {
+                per100 = Math.round((Number(total) * 100) / Number(weight));
+            }
+            return {
+                name: ing.name,
+                weight: Number(weight) || 0,
+                caloriesPer100g: Number(per100) || 0,
+                totalCalories: Math.round(Number(total) || 0)
+            };
+        });
+
+    // Compute totals EXCLUSIVELY from ingredients (ignore any provided yield/overall totals)
+    const totalWeight = normIngredients.reduce((s, i) => s + (Number(i.weight) || 0), 0);
+    const totalCalories = normIngredients.reduce((s, i) => s + (Number(i.totalCalories) || 0), 0);
+
         // Create cooking record
         const cookingData = {
-            mealName: response.meal_name || response.foods[0]?.name || 'Unknown Meal',
-            totalWeight: response.total_weight || 0,
-            totalCalories: response.total_calories || 0,
+            mealName: response.meal_name || response.foods?.[0]?.name || 'Cooked Meal',
+            totalWeight: Math.round(totalWeight) || 0,
+            totalCalories: Math.round(totalCalories) || 0,
             cookedDate: response.date,
             cookedTime: response.time,
-            audioRecordId: audioRecordId
+            audioRecordId: audioRecordId,
+            // Include ingredient names for preview convenience
+            ingredients: normIngredients.map(i => i.name).slice(0, 6)
         };
-
         const cookingRecord = storage.addCookingRecord(cookingData);
 
-        // Add ingredients
-        if (response.foods && response.foods.length > 0) {
-            for (let food of response.foods) {
-                if (food.ingredients && food.ingredients.length > 0) {
-                    for (let ingredient of food.ingredients) {
-                        storage.addIngredient({
-                            cookingRecordId: cookingRecord.id,
-                            name: ingredient.name,
-                            weight: ingredient.weight,
-                            caloriesPer100g: food.calories_per_100g || 0,
-                            totalCalories: ingredient.calories
-                        });
-                    }
-                }
-            }
-        }
+        // Persist ingredients
+        normIngredients.forEach(ing => {
+            storage.addIngredient({
+                cookingRecordId: cookingRecord.id,
+                name: ing.name,
+                weight: ing.weight,
+                caloriesPer100g: ing.caloriesPer100g
+            });
+        });
 
         return { type: 'cooking', record: cookingRecord };
     }

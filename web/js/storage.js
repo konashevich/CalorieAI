@@ -445,14 +445,17 @@ class StorageManager {
 
     // Data export/import for backup
     exportData() {
+        // Export all data EXCEPT audio recordings
         const data = {
-            audioRecords: this.getAudioRecords(),
             cookingRecords: this.getCookingRecords(),
             ingredients: this.getIngredients(),
             eatingRecords: this.getEatingRecords(),
             settings: this.getData(this.storageKeys.APP_SETTINGS),
-            exportDate: new Date().toISOString(),
-            version: '1.0.0'
+            meta: {
+                exportDate: new Date().toISOString(),
+                version: '1.0.0',
+                audioExcluded: true
+            }
         };
         return JSON.stringify(data, null, 2);
     }
@@ -461,9 +464,7 @@ class StorageManager {
         try {
             const data = JSON.parse(jsonData);
             
-            if (data.audioRecords) {
-                this.setData(this.storageKeys.AUDIO_RECORDS, data.audioRecords);
-            }
+            // Intentionally ignore audioRecords if present in backup
             if (data.cookingRecords) {
                 this.setData(this.storageKeys.COOKING_RECORDS, data.cookingRecords);
             }

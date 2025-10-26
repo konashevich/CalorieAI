@@ -221,28 +221,28 @@ body {
 /* Recording Section */
 .recording-section {
     text-align: center;
-    margin-bottom: 2rem;
-    padding: 2rem 1rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
     background-color: var(--bg-card);
-    border-radius: 16px;
+    border-radius: 12px;
     box-shadow: var(--shadow);
 }
 
 .record-controls {
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .record-btn {
-    width: 80px;
-    height: 80px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     border: none;
     background-color: var(--bg-secondary);
     color: var(--accent-recording);
-    font-size: 2rem;
+    font-size: 1.75rem;
     cursor: pointer;
     transition: all 0.3s ease;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .record-btn:hover {
@@ -262,16 +262,24 @@ body {
 }
 
 .recording-status {
-    font-size: 1rem;
+    font-size: 0.95rem;
     color: var(--text-primary);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
+    display: none; /* hidden by default; shown during recording or when we have a status message */
 }
 
 .recording-timer {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 600;
     color: var(--accent-primary);
     font-family: 'Courier New', monospace;
+    display: none; /* hidden when idle */
+}
+
+/* When actively recording, reveal status and timer */
+.recording-section.recording .recording-status,
+.recording-section.recording .recording-timer {
+    display: block;
 }
 
 .record-actions {
@@ -321,6 +329,30 @@ body {
     color: var(--text-primary);
 }
 
+/* Section header with action button */
+.food-section .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.food-section .section-header h3 {
+    margin: 0;
+}
+
+/* Reuse section header pattern for Cook page */
+.meals-section .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.meals-section .section-header h3 {
+    margin: 0;
+}
+
 .records-list,
 .meals-list,
 .food-list {
@@ -336,7 +368,7 @@ body {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 1rem;
+    padding: 0.5rem 0.75rem;
     box-shadow: var(--shadow);
     transition: transform 0.2s ease;
 }
@@ -384,6 +416,7 @@ body {
     background: var(--accent-bg);
     border-radius: 8px;
     cursor: pointer;
+    -webkit-user-select: none;
     user-select: none;
     transition: background-color 0.2s ease;
     border: 1px solid var(--border-color);
@@ -436,40 +469,115 @@ body {
 }
 
 /* Enhanced Record Items */
-.record-time {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-    font-weight: 500;
+.record-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.2;
+    min-height: 32px;
 }
 
-.record-status-container {
-    flex: 1;
-    margin: 0 10px;
-}
-
-.record-status {
+.record-date {
     font-size: 0.8rem;
-    padding: 2px 6px;
-    border-radius: 4px;
-    display: inline-block;
-    margin-bottom: 4px;
-}
-
-.record-status.processed {
-    background: rgba(34, 197, 94, 0.1);
-    color: rgb(34, 197, 94);
-}
-
-.record-status.pending {
-    background: rgba(234, 179, 8, 0.1);
-    color: rgb(234, 179, 8);
-}
-
-.record-preview {
-    font-size: 0.85rem;
-    font-style: italic;
     color: var(--text-secondary);
-    line-height: 1.3;
+    flex-shrink: 0;
+    width: 64px;
+    line-height: 1.2;
+}
+
+.status-checkbox {
+    font-size: 1.1rem;
+    line-height: 1;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+}
+
+.status-checkbox.complete {
+    color: var(--accent-success);
+}
+
+.status-checkbox.incomplete {
+    color: var(--text-secondary);
+}
+
+.record-item .btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.record-item .btn-icon:hover {
+    background: var(--hover-bg);
+}
+
+.record-item .btn-icon svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    color: var(--text-primary);
+}
+
+.record-item .btn-icon:hover svg {
+    color: var(--accent-primary);
+}
+
+/* Slightly smaller document icon to visually match weight with checkbox/text */
+.record-item .btn-icon.doc-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.record-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    line-height: 1.2;
+}
+
+/* Compact Food Items (single-line like records) */
+.food-item.compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.2;
+    min-height: 32px;
+    padding: 0.5rem 0.75rem;
+}
+
+.food-time {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    width: 42px;
+    line-height: 1.2;
+}
+
+.food-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-size: 0.9rem;
 }
 
 .record-actions,
@@ -483,20 +591,59 @@ body {
 .btn-icon {
     background: none;
     border: none;
-    font-size: 1rem;
     cursor: pointer;
-    padding: 5px;
-    border-radius: 4px;
+    padding: 0;
+    border-radius: 6px;
     transition: background-color 0.2s ease;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
+    line-height: 0;
+    vertical-align: middle;
+    flex: 0 0 auto;
 }
 
 .btn-icon:hover {
     background: var(--hover-bg);
+}
+
+/* Ensure SVG icons inside generic icon buttons are visible */
+.btn-icon svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+    color: var(--text-primary);
+}
+
+.btn-icon:hover svg {
+    color: var(--accent-primary);
+}
+
+/* Make the Add button in the Food section header clearly visible */
+.food-section .section-header .btn-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.food-section .section-header .btn-icon:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
+}
+
+.meals-section .section-header .btn-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.meals-section .section-header .btn-icon:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
 }
 
 /* Meal Progress */
@@ -931,13 +1078,13 @@ body {
     }
     
     .recording-section {
-        padding: 1.5rem 0.75rem;
+        padding: 0.75rem;
     }
     
     .record-btn {
-        width: 70px;
-        height: 70px;
-        font-size: 1.75rem;
+        width: 64px;
+        height: 64px;
+        font-size: 1.6rem;
     }
 }
 
@@ -946,7 +1093,6 @@ body {
         flex-direction: column;
         align-items: center;
     }
-    
     .action-btn {
         width: 100%;
         max-width: 200px;
@@ -971,7 +1117,7 @@ button:focus,
 }
 
 /* PWA Elements */
-.install-btn,
+/* Install button is part of the header layout; do not absolutely position it here. */
 .update-btn {
     position: absolute;
     top: 1rem;
@@ -988,7 +1134,6 @@ button:focus,
     z-index: 110;
 }
 
-.install-btn:hover,
 .update-btn:hover {
     background-color: var(--accent-success);
     transform: translateY(-1px);
@@ -1273,6 +1418,19 @@ button:focus,
     outline: none;
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+/* 24h Time Picker */
+.time-24-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.time-24-wrapper select.form-input {
+    width: auto;
+    min-width: 90px;
+    padding: 0.5rem 0.75rem;
 }
 
 .form-actions {
@@ -1697,6 +1855,15 @@ button:focus,
     color: white;
 }
 
+/* Ingredients editor spacing (moved from inline styles) */
+#ingredientsEditor .ingredient-inputs {
+    margin-bottom: 0.75rem;
+}
+
+#ingredientsTotals {
+    margin-top: 8px;
+}
+
 /* Toast Notifications */
 .toast-container {
     position: fixed;
@@ -1827,4 +1994,35 @@ button:focus,
 .bottom-nav .nav-btn {
     flex: 1;
     max-width: 80px;
+}
+
+/* Floating Add Button on Eat page */
+.fab-add {
+    position: fixed;
+    right: 1rem;
+    bottom: 88px; /* sit above bottom nav */
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: var(--accent-primary);
+    color: white;
+    border: none;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 140; /* above content, below protocol-warning */
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.fab-add:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(0,0,0,0.28);
+    background-color: var(--accent-success);
+}
+
+.fab-add svg {
+    width: 24px;
+    height: 24px;
 }

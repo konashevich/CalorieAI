@@ -93,6 +93,8 @@ class CalorieAIApp {
         const headerMenuBtn = document.getElementById('headerMenuBtn');
         const headerMenu = document.getElementById('headerMenu');
         const headerSettingsBtn = document.getElementById('headerSettingsBtn');
+        const headerExportBtn = document.getElementById('headerExportBtn');
+        const headerImportBtn = document.getElementById('headerImportBtn');
         const settingsModal = document.getElementById('settingsModal');
         const closeSettingsModal = document.getElementById('closeSettingsModal');
         const settingsForm = document.getElementById('settingsForm');
@@ -111,6 +113,56 @@ class CalorieAIApp {
             this.loadSettings();
             this.showModal('settingsModal');
             // hide header menu
+            if (headerMenu) {
+                headerMenu.setAttribute('aria-hidden', 'true');
+                headerMenu.classList.remove('open');
+            }
+        });
+
+        // Export data (JSON download, exclude audio recordings)
+        headerExportBtn?.addEventListener('click', () => {
+            try {
+                const json = this.storage.exportData();
+                const ts = new Date().toISOString().replace(/[:]/g, '-').split('.')[0];
+                const filename = `calorieai-backup-${ts}.json`;
+                this.downloadFile(filename, json);
+                this.showToast('Export started (JSON file)', 'success');
+            } catch (e) {
+                console.error(e);
+                this.showError('Failed to export data');
+            }
+            if (headerMenu) {
+                headerMenu.setAttribute('aria-hidden', 'true');
+                headerMenu.classList.remove('open');
+            }
+        });
+
+        // Import data (JSON file picker, excludes audio records by design)
+        headerImportBtn?.addEventListener('click', async () => {
+            if (!confirm('Importing will replace current meals, foods, ingredients, and settings. Audio recordings are not affected. Continue?')) {
+                return;
+            }
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'application/json,.json';
+            input.addEventListener('change', async () => {
+                const file = input.files && input.files[0];
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    const ok = this.storage.importData(text);
+                    if (ok) {
+                        this.refreshAllPages();
+                        this.showToast('Import complete', 'success');
+                    } else {
+                        this.showError('Import failed: invalid file');
+                    }
+                } catch (e) {
+                    console.error('Import error', e);
+                    this.showError('Import error');
+                }
+            }, { once: true });
+            input.click();
             if (headerMenu) {
                 headerMenu.setAttribute('aria-hidden', 'true');
                 headerMenu.classList.remove('open');
@@ -187,7 +239,7 @@ class CalorieAIApp {
         // Initialize Gemini AI
         try {
             this.geminiAI.initialize(apiKey);
-            this.showMessage('Settings saved! Gemini AI is now active.');
+            
         } catch (error) {
             console.error('Failed to initialize Gemini AI:', error);
             this.showError('Invalid API key. Please check and try again.');
@@ -245,6 +297,25 @@ class CalorieAIApp {
     showError(message) {
         console.error('Error:', message);
         alert('Error: ' + message); // Simple alert for demo
+    }
+
+    downloadFile(filename, textContent) {
+        try {
+            const blob = new Blob([textContent], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+        } catch (e) {
+            console.error('Download error', e);
+            this.showError('Failed to start download');
+        }
     }
 }
 
@@ -385,23 +456,53 @@ class RecordManager {
     }
 
     renderRecordItem(record) {
-        const duration = record.duration ? `${record.duration}s` : 'Unknown';
-        const statusIcon = this.getStatusIcon(record);
         const hasTranscription = record.transcribed && record.transcriptionData;
-        
+        const preview = hasTranscription ? this.getTranscriptionPreview(record) : '';
+        const isComplete = this.isRecordComplete(record);
+        const dateShort = this.formatShortDate(record.recordedDate);
+
         return `
             <div class="record-item" data-record-id="${record.id}" oncontextmenu="window.app.recordManager.showContextMenu(event, '${record.id}')">
-                <div class="record-time">${record.recordedTime}</div>
-                <div class="record-status-container">
-                    <div class="record-status ${record.transcribed ? 'processed' : 'pending'}">${statusIcon}</div>
-                    ${hasTranscription ? `<div class="record-preview">"${this.getTranscriptionPreview(record)}"</div>` : ''}
-                </div>
-                <div class="record-actions">
-                    <button class="btn-icon" onclick="window.app.recordManager.showRecordDetails('${record.id}')" title="View Details">👁️</button>
-                    <button class="btn-icon" onclick="window.app.recordManager.playRecord('${record.id}')" title="Play">▶️</button>
-                </div>
+                <span class="record-date">${dateShort}</span>
+                <span class="status-checkbox ${isComplete ? 'complete' : 'incomplete'}" title="${isComplete ? 'Complete' : 'Incomplete'}">${isComplete ? '☑' : '☐'}</span>
+                <button class="btn-icon" onclick="window.app.recordManager.showRecordDetails('${record.id}')" title="Details" aria-label="Details">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+                        <path d="M9 0H3a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V5L9 0zm0 1l4 4H9V1z"/>
+                    </svg>
+                </button>
+                <button class="btn-icon" onclick="window.app.recordManager.playRecord('${record.id}')" title="Play" aria-label="Play">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+                        <path d="M4 2v12l9-6z"/>
+                    </svg>
+                </button>
+                <span class="record-text" title="${preview.replace(/"/g, '&quot;')}">${preview}</span>
+                <button class="btn-icon" onclick="if(confirm('Delete this recording? This action cannot be undone.')) window.app.recordManager.deleteRecord('${record.id}')" title="Delete" aria-label="Delete">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                        <path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"/>
+                        <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 1 1 0-2H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4 4v9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4H4zM6 2a.5.5 0 0 0-.5.5V3h5v-.5A.5.5 0 0 0 10 2H6z"/>
+                    </svg>
+                </button>
             </div>
         `;
+    }
+
+    formatShortDate(dateString) {
+        try {
+            const d = new Date(dateString);
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        } catch (e) {
+            return dateString;
+        }
+    }
+
+    isRecordComplete(record) {
+        if (!record.transcribed || !record.transcriptionData) return false;
+        try {
+            const data = JSON.parse(record.transcriptionData);
+            return data.status === 'complete' || data.status === 'processed' || record.transcribed === true;
+        } catch (e) {
+            return !!record.transcribed;
+        }
     }
 
     getStatusIcon(record) {
@@ -455,7 +556,7 @@ class RecordManager {
         }
         const content = modal.querySelector('#recordDetailsBody');
         
-        const time = new Date(`${record.recordedDate} ${record.recordedTime}`).toLocaleString();
+    const time = new Date(`${record.recordedDate} ${record.recordedTime}`).toLocaleString('en-GB', { hour12: false });
         const duration = record.duration ? `${record.duration}s` : 'Unknown';
         
         let transcriptionHtml = '';
@@ -696,14 +797,67 @@ class CookManager {
     constructor(storage) {
         this.storage = storage;
         this.mealsList = document.getElementById('mealsList');
+        this.editIngredients = [];
         this.setupModals();
+
+        // Manual add buttons (header and floating)
+        const addBtn = document.getElementById('addMealBtn');
+        addBtn?.addEventListener('click', () => this.openCreateMeal());
+        const fabAdd = document.getElementById('fabAddMeal');
+        fabAdd?.addEventListener('click', () => this.openCreateMeal());
+    }
+
+    // Convert ANY time format to 24-hour format (HH:MM)
+    formatTime24(timeString) {
+        if (!timeString) return '';
+        
+        // If already in 24-hour format (HH:MM or HH:MM:SS), just return first 5 chars
+        if (timeString.match(/^\d{2}:\d{2}/)) {
+            return timeString.substring(0, 5);
+        }
+        
+        // If in 12-hour format with AM/PM, convert it
+        const match = timeString.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)/i);
+        if (match) {
+            let hours = parseInt(match[1]);
+            const minutes = match[2];
+            const period = match[4].toUpperCase();
+            
+            if (period === 'PM' && hours !== 12) {
+                hours += 12;
+            } else if (period === 'AM' && hours === 12) {
+                hours = 0;
+            }
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes}`;
+        }
+        
+        return timeString;
     }
 
     setupModals() {
         // Meal details modal
         const mealModal = document.getElementById('mealDetailsModal');
-        const mealCloseBtn = mealModal?.querySelector('.close-btn');
+        const mealCloseBtn = document.getElementById('closeMealModal');
         mealCloseBtn?.addEventListener('click', () => this.closeModal('mealDetailsModal'));
+
+        // Edit/Delete in details header
+        const editMealBtn = document.getElementById('editMealBtn');
+        const deleteMealBtn = document.getElementById('deleteMealBtn');
+        editMealBtn?.addEventListener('click', () => {
+            const currentId = document.getElementById('mealDetailsModal')?.dataset.mealId;
+            if (currentId) {
+                this.closeModal('mealDetailsModal');
+                this.openEditMeal(currentId);
+            }
+        });
+        deleteMealBtn?.addEventListener('click', () => {
+            const currentId = document.getElementById('mealDetailsModal')?.dataset.mealId;
+            if (currentId && confirm('Delete this meal? This action cannot be undone.')) {
+                this.closeModal('mealDetailsModal');
+                this.deleteMeal(currentId);
+            }
+        });
 
         // Click outside to close
         mealModal?.addEventListener('click', (e) => {
@@ -711,6 +865,102 @@ class CookManager {
                 this.closeModal('mealDetailsModal');
             }
         });
+
+        // Create cooked meal modal
+    const createModal = document.getElementById('mealCreateModal');
+        const closeCreateBtn = document.getElementById('closeMealCreate');
+        const cancelCreateBtn = document.getElementById('cancelMealCreate');
+        const createForm = document.getElementById('mealCreateForm');
+        const hourSelect = document.getElementById('mealTimeHour');
+        const minuteSelect = document.getElementById('mealTimeMinute');
+        const hiddenTime = document.getElementById('mealTime');
+        const addIngBtn = document.getElementById('addIngredientBtn');
+        const ingList = document.getElementById('ingredientsList');
+        const ingName = document.getElementById('ingName');
+        const ingWeight = document.getElementById('ingWeight');
+        const ingCals100 = document.getElementById('ingCals100');
+
+        closeCreateBtn?.addEventListener('click', () => this.closeModal('mealCreateModal'));
+        cancelCreateBtn?.addEventListener('click', () => this.closeModal('mealCreateModal'));
+        createForm?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveCreateMeal();
+        });
+
+        // Ingredients: add button
+        addIngBtn?.addEventListener('click', () => {
+            const name = (ingName?.value || '').trim();
+            const weight = parseFloat(ingWeight?.value || '0');
+            const cals100 = parseFloat(ingCals100?.value || '0');
+            if (!name || weight <= 0 || cals100 < 0) {
+                window.app?.showToast?.('Enter name, positive weight, and cal/100g', 'error');
+                return;
+            }
+            const totalCalories = Math.round((weight * cals100) / 100);
+            this.editIngredients.push({ name, weight, caloriesPer100g: cals100, totalCalories });
+            if (ingName) ingName.value = '';
+            if (ingWeight) ingWeight.value = '';
+            if (ingCals100) ingCals100.value = '';
+            this.renderIngredientsEditor();
+        });
+
+        // Ingredients: delegate input and delete
+        ingList?.addEventListener('input', (e) => {
+            const row = e.target.closest('[data-index]');
+            if (!row) return;
+            const idx = parseInt(row.dataset.index, 10);
+            const field = e.target.getAttribute('data-field');
+            if (Number.isNaN(idx) || !field) return;
+            if (field === 'name') {
+                this.editIngredients[idx].name = e.target.value;
+            } else if (field === 'weight') {
+                const w = parseFloat(e.target.value || '0');
+                this.editIngredients[idx].weight = w;
+            } else if (field === 'cals100') {
+                const c = parseFloat(e.target.value || '0');
+                this.editIngredients[idx].caloriesPer100g = c;
+            }
+            // Recompute per-row calories and totals
+            const ing = this.editIngredients[idx];
+            ing.totalCalories = Math.round((ing.weight || 0) * (ing.caloriesPer100g || 0) / 100);
+            this.updateIngredientRow(row, ing);
+            this.updateIngredientsTotals();
+        });
+        ingList?.addEventListener('click', (e) => {
+            const delBtn = e.target.closest('[data-action="delete-ing"]');
+            if (!delBtn) return;
+            const row = delBtn.closest('[data-index]');
+            if (!row) return;
+            const idx = parseInt(row.dataset.index, 10);
+            this.editIngredients.splice(idx, 1);
+            this.renderIngredientsEditor();
+        });
+
+        // Populate 24h selects
+        if (hourSelect && minuteSelect) {
+            if (hourSelect.options.length === 0) {
+                for (let h = 0; h < 24; h++) {
+                    const opt = document.createElement('option');
+                    opt.value = h.toString().padStart(2, '0');
+                    opt.textContent = h.toString().padStart(2, '0');
+                    hourSelect.appendChild(opt);
+                }
+            }
+            if (minuteSelect.options.length === 0) {
+                for (let m = 0; m < 60; m += 5) {
+                    const opt = document.createElement('option');
+                    opt.value = m.toString().padStart(2, '0');
+                    opt.textContent = m.toString().padStart(2, '0');
+                    minuteSelect.appendChild(opt);
+                }
+            }
+
+            const syncHidden = () => {
+                if (hiddenTime) hiddenTime.value = `${hourSelect.value}:${minuteSelect.value}`;
+            };
+            hourSelect.addEventListener('change', syncHidden);
+            minuteSelect.addEventListener('change', syncHidden);
+        }
     }
 
     refreshMealsList() {
@@ -776,7 +1026,7 @@ class CookManager {
         return `
             <div class="meal-item" data-meal-id="${meal.id}">
                 <div class="item-header">
-                    <span class="item-time">${meal.cookedTime}</span>
+                    <span class="item-time">${this.formatTime24(meal.cookedTime)}</span>
                     <div class="meal-actions-header">
                         <button class="btn-icon" onclick="window.app.cookManager.showMealDetails('${meal.id}')" title="View Details">👁️</button>
                         <button class="btn-icon" onclick="window.app.cookManager.deleteMeal('${meal.id}')" title="Delete">🗑️</button>
@@ -828,9 +1078,12 @@ class CookManager {
         if (!meal) return;
         
         const modal = document.getElementById('mealDetailsModal');
-        const content = modal.querySelector('.meal-detail-content');
+        const content = document.getElementById('mealDetailsBody');
+        if (modal) modal.dataset.mealId = mealId;
+        const titleEl = document.getElementById('mealDetailsTitle');
+        if (titleEl) titleEl.textContent = meal.mealName || 'Meal Details';
         
-        const cookedTime = new Date(`${meal.cookedDate} ${meal.cookedTime}`).toLocaleString();
+    const cookedTime = new Date(`${meal.cookedDate} ${meal.cookedTime}`).toLocaleString('en-GB', { hour12: false });
         const progressPercent = ((meal.totalWeight - meal.remainingWeight) / meal.totalWeight) * 100;
         const caloriesPerGram = meal.totalCalories / meal.totalWeight;
         const remainingCalories = Math.round(meal.remainingWeight * caloriesPerGram);
@@ -910,6 +1163,46 @@ class CookManager {
         this.showModal('mealDetailsModal');
     }
 
+    openEditMeal(mealId) {
+        const meal = this.storage.getCookingRecords().find(m => m.id === mealId);
+        if (!meal) return;
+
+        const createModal = document.getElementById('mealCreateModal');
+        const title = document.getElementById('mealCreateTitle');
+        const nameInput = document.getElementById('mealName');
+        const weightInput = document.getElementById('mealTotalWeight');
+        const caloriesInput = document.getElementById('mealTotalCalories');
+        const dateInput = document.getElementById('mealDate');
+        const hourSelect = document.getElementById('mealTimeHour');
+        const minuteSelect = document.getElementById('mealTimeMinute');
+        const hiddenTime = document.getElementById('mealTime');
+
+        if (title) title.textContent = 'Edit Cooked Meal';
+        if (createModal) createModal.dataset.editMealId = mealId;
+
+        if (nameInput) nameInput.value = meal.mealName || '';
+        if (weightInput) weightInput.value = meal.totalWeight || '';
+        if (caloriesInput) caloriesInput.value = meal.totalCalories || 0;
+        if (dateInput) dateInput.value = meal.cookedDate || new Date().toISOString().split('T')[0];
+
+        const hhmm = this.formatTime24(meal.cookedTime || '00:00');
+        const [hh, mm] = hhmm.split(':');
+        if (hourSelect) hourSelect.value = hh;
+        if (minuteSelect) minuteSelect.value = mm;
+        if (hiddenTime) hiddenTime.value = `${hh}:${mm}`;
+
+        // Load ingredients
+        this.editIngredients = (this.storage.getIngredientsByMealId(mealId) || []).map(ing => ({
+            name: ing.name,
+            weight: ing.weight,
+            caloriesPer100g: ing.caloriesPer100g,
+            totalCalories: Math.round((ing.weight || 0) * (ing.caloriesPer100g || 0) / 100)
+        }));
+        this.renderIngredientsEditor();
+
+        this.showModal('mealCreateModal');
+    }
+
     addServing(mealId) {
         const input = this.mealsList.querySelector(`input[data-meal-id="${mealId}"]`);
         const servingWeight = parseInt(input?.value) || 100;
@@ -961,7 +1254,11 @@ class CookManager {
             window.app.eatManager.refreshFoodList();
         }
         
-        alert(`Added ${servingWeight}g of ${meal.mealName} (${servingCalories} cal) to today's eaten food!`);
+        if (window.app?.showToast) {
+            window.app.showToast(`Added ${servingWeight}g of ${meal.mealName} (${servingCalories} cal) to today's eaten food`, 'success');
+        } else {
+            console.log(`Added ${servingWeight}g of ${meal.mealName} (${servingCalories} cal) to today's eaten food`);
+        }
     }
 
     deleteMeal(mealId) {
@@ -969,6 +1266,177 @@ class CookManager {
             this.storage.deleteCookingRecord(mealId);
             this.refreshMealsList();
         }
+    }
+
+    openCreateMeal() {
+        // Defaults
+        const nameInput = document.getElementById('mealName');
+        const weightInput = document.getElementById('mealTotalWeight');
+        const caloriesInput = document.getElementById('mealTotalCalories');
+        const dateInput = document.getElementById('mealDate');
+        const hourSelect = document.getElementById('mealTimeHour');
+        const minuteSelect = document.getElementById('mealTimeMinute');
+        const hiddenTime = document.getElementById('mealTime');
+        const title = document.getElementById('mealCreateTitle');
+        const createModal = document.getElementById('mealCreateModal');
+
+        if (title) title.textContent = 'Add Cooked Meal';
+        if (createModal) delete createModal.dataset.editMealId;
+
+        const now = new Date();
+        const rounded = new Date(Math.round(now.getTime() / (5*60*1000)) * (5*60*1000));
+        dateInput.value = now.toISOString().split('T')[0];
+        const hh = rounded.getHours().toString().padStart(2, '0');
+        const mm = rounded.getMinutes().toString().padStart(2, '0');
+        if (hourSelect) hourSelect.value = hh;
+        if (minuteSelect) minuteSelect.value = mm;
+        if (hiddenTime) hiddenTime.value = `${hh}:${mm}`;
+
+        // Clear fields
+        if (nameInput) nameInput.value = '';
+        if (weightInput) weightInput.value = '';
+        if (caloriesInput) caloriesInput.value = '';
+
+        // Reset ingredients editor
+        this.editIngredients = [];
+        this.renderIngredientsEditor();
+
+        this.showModal('mealCreateModal');
+    }
+
+    saveCreateMeal() {
+        const name = document.getElementById('mealName')?.value?.trim();
+        const totalWeight = parseInt(document.getElementById('mealTotalWeight')?.value || '0', 10);
+        const totalCalories = parseInt(document.getElementById('mealTotalCalories')?.value || '0', 10);
+        const cookedDate = document.getElementById('mealDate')?.value;
+        const cookedTime = document.getElementById('mealTime')?.value;
+        const createModal = document.getElementById('mealCreateModal');
+        const editingMealId = createModal?.dataset?.editMealId;
+
+        if (!name || !cookedDate || !cookedTime || !totalWeight || totalWeight < 1) {
+            if (window.app?.showToast) {
+                window.app.showToast('Please fill in name, date, time, and a valid total weight.', 'error');
+            } else {
+                alert('Please fill in name, date, time, and a valid total weight.');
+            }
+            return;
+        }
+
+        // If ingredients exist, recompute totals from ingredients
+        let computedWeight = 0;
+        let computedCalories = 0;
+        if (this.editIngredients && this.editIngredients.length > 0) {
+            this.editIngredients.forEach(ing => {
+                computedWeight += Number(ing.weight) || 0;
+                // prefer recompute from cals/100g
+                const tcal = Math.round(((Number(ing.weight) || 0) * (Number(ing.caloriesPer100g) || 0)) / 100);
+                computedCalories += tcal;
+            });
+        }
+
+        const hasIngredients = this.editIngredients && this.editIngredients.length > 0;
+        const finalTotalWeight = hasIngredients ? computedWeight : totalWeight;
+        const finalTotalCalories = hasIngredients ? computedCalories : (isNaN(totalCalories) ? 0 : totalCalories);
+
+        if (editingMealId) {
+            const existing = this.storage.getCookingRecords().find(m => m.id === editingMealId);
+            if (!existing) return;
+            const consumed = Math.max((existing.totalWeight || 0) - (existing.remainingWeight || 0), 0);
+            const newRemaining = Math.max(finalTotalWeight - consumed, 0);
+            const updated = this.storage.updateCookingRecord(editingMealId, {
+                mealName: name,
+                totalWeight: finalTotalWeight,
+                totalCalories: finalTotalCalories,
+                remainingWeight: newRemaining,
+                cookedDate,
+                cookedTime
+            });
+
+            // Update ingredients set
+            if (hasIngredients) {
+                this.storage.deleteIngredientsByMealId(editingMealId);
+                this.editIngredients.forEach(ing => {
+                    this.storage.addIngredient({
+                        cookingRecordId: editingMealId,
+                        name: ing.name,
+                        weight: Number(ing.weight) || 0,
+                        caloriesPer100g: Number(ing.caloriesPer100g) || 0
+                    });
+                });
+            }
+            this.closeModal('mealCreateModal');
+            this.refreshMealsList();
+            if (window.app?.showToast) {
+                window.app.showToast(`Updated cooked meal: ${updated.mealName}`, 'success');
+            }
+        } else {
+            const newMeal = this.storage.addCookingRecord({
+                mealName: name,
+                totalWeight: finalTotalWeight,
+                totalCalories: finalTotalCalories,
+                remainingWeight: finalTotalWeight,
+                cookedDate,
+                cookedTime,
+                source: 'manual'
+            });
+
+            // Add ingredients if provided
+            if (hasIngredients) {
+                this.editIngredients.forEach(ing => {
+                    this.storage.addIngredient({
+                        cookingRecordId: newMeal.id,
+                        name: ing.name,
+                        weight: Number(ing.weight) || 0,
+                        caloriesPer100g: Number(ing.caloriesPer100g) || 0
+                    });
+                });
+            }
+
+            this.closeModal('mealCreateModal');
+            this.refreshMealsList();
+            if (window.app?.showToast) {
+                window.app.showToast(`Added cooked meal: ${newMeal.mealName}`, 'success');
+            }
+        }
+    }
+
+    // -------- Ingredients editor helpers --------
+    renderIngredientsEditor() {
+        const list = document.getElementById('ingredientsList');
+        if (!list) return;
+        if (!this.editIngredients) this.editIngredients = [];
+        list.innerHTML = this.editIngredients.map((ing, i) => `
+            <div class="ingredient-item" data-index="${i}">
+                <div class="ingredient-info" style="flex:2; display:flex; gap:8px; align-items:center;">
+                    <input class="form-input" data-field="name" value="${ing.name || ''}" placeholder="Name" />
+                    <input class="form-input" data-field="weight" type="number" min="0" value="${ing.weight || 0}" placeholder="Weight (g)" style="max-width:120px;" />
+                    <input class="form-input" data-field="cals100" type="number" min="0" value="${ing.caloriesPer100g || 0}" placeholder="Cal/100g" style="max-width:120px;" />
+                    <span class="ingredient-details">= ${Math.round((Number(ing.weight)||0)*(Number(ing.caloriesPer100g)||0)/100)} cal</span>
+                </div>
+                <div class="ingredient-actions">
+                    <button type="button" class="btn-icon" data-action="delete-ing" title="Remove">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        this.updateIngredientsTotals();
+    }
+
+    updateIngredientRow(rowEl, ing) {
+        const details = rowEl.querySelector('.ingredient-details');
+        if (details) {
+            const cal = Math.round(((Number(ing.weight)||0) * (Number(ing.caloriesPer100g)||0))/100);
+            details.textContent = `= ${cal} cal`;
+        }
+    }
+
+    updateIngredientsTotals() {
+        const totalsEl = document.getElementById('ingredientsTotals');
+        if (!totalsEl) return;
+        const totalG = (this.editIngredients || []).reduce((s, ing) => s + (Number(ing.weight)||0), 0);
+        const totalCal = (this.editIngredients || []).reduce((s, ing) => s + Math.round(((Number(ing.weight)||0) * (Number(ing.caloriesPer100g)||0))/100), 0);
+        totalsEl.textContent = `Totals: ${Math.round(totalG)} g, ${Math.round(totalCal)} cal`;
     }
 
     showModal(modalId) {
@@ -1018,16 +1486,86 @@ class EatManager {
         
         this.bindDateNavigation();
         this.setupModals();
+
+        // Manual add button
+    const addBtn = document.getElementById('addFoodBtn');
+    addBtn?.addEventListener('click', () => this.addFood());
+    const fabAdd = document.getElementById('fabAddFood');
+    fabAdd?.addEventListener('click', () => this.addFood());
+    }
+
+    // Convert ANY time format to 24-hour format (HH:MM)
+    formatTime24(timeString) {
+        if (!timeString) return '';
+        
+        // If already in 24-hour format (HH:MM or HH:MM:SS), just return first 5 chars
+        if (timeString.match(/^\d{2}:\d{2}/)) {
+            return timeString.substring(0, 5);
+        }
+        
+        // If in 12-hour format with AM/PM, convert it
+        const match = timeString.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)/i);
+        if (match) {
+            let hours = parseInt(match[1]);
+            const minutes = match[2];
+            const period = match[4].toUpperCase();
+            
+            if (period === 'PM' && hours !== 12) {
+                hours += 12;
+            } else if (period === 'AM' && hours === 12) {
+                hours = 0;
+            }
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes}`;
+        }
+        
+        return timeString;
     }
 
     setupModals() {
         // Food details modal
         const foodModal = document.getElementById('foodDetailsModal');
-        const foodCloseBtn = foodModal?.querySelector('.close-btn');
-        const foodSaveBtn = foodModal?.querySelector('#food-save');
+        const foodCloseBtn = document.getElementById('closeFoodModal');
+        const foodCancelBtn = document.getElementById('cancelFoodEdit');
+        const foodForm = document.getElementById('foodDetailsForm');
+        const hourSelect = document.getElementById('foodTimeHour');
+        const minuteSelect = document.getElementById('foodTimeMinute');
+        const hiddenTime = document.getElementById('foodTime');
         
         foodCloseBtn?.addEventListener('click', () => this.closeModal('foodDetailsModal'));
-        foodSaveBtn?.addEventListener('click', () => this.saveFoodEdit());
+        foodCancelBtn?.addEventListener('click', () => this.closeModal('foodDetailsModal'));
+        
+        // Handle form submission
+        foodForm?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveFoodEdit();
+        });
+
+        // Build 24h picker options (00-23 and 00-59 step 5)
+        if (hourSelect && hourSelect.options.length === 0) {
+            for (let h = 0; h <= 23; h++) {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = h.toString().padStart(2, '0');
+                hourSelect.appendChild(opt);
+            }
+        }
+        if (minuteSelect && minuteSelect.options.length === 0) {
+            for (let m = 0; m <= 59; m += 5) {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = m.toString().padStart(2, '0');
+                minuteSelect.appendChild(opt);
+            }
+        }
+
+        // Keep hidden HH:MM in sync
+        const syncHidden = () => {
+            if (!hourSelect || !minuteSelect || !hiddenTime) return;
+            const hh = (hourSelect.value || '00').padStart(2, '0');
+            const mm = (minuteSelect.value || '00').padStart(2, '0');
+            hiddenTime.value = `${hh}:${mm}`;
+        };
+        hourSelect?.addEventListener('change', syncHidden);
+        minuteSelect?.addEventListener('change', syncHidden);
 
         // Click outside to close
         foodModal?.addEventListener('click', (e) => {
@@ -1113,77 +1651,34 @@ class EatManager {
             return;
         }
 
-        // Group foods by meal type or time
-        const groupedFoods = this.groupFoodsByTime(foods);
+        // Sort foods by time
+        foods.sort((a, b) => a.eatenTime.localeCompare(b.eatenTime));
         
-        let html = '';
-        for (let [timeGroup, groupFoods] of Object.entries(groupedFoods)) {
-            html += `
-                <div class="time-group">
-                    <h4 class="time-header">${timeGroup}</h4>
-                    ${groupFoods.map(food => this.renderFoodItem(food)).join('')}
-                </div>
-            `;
-        }
+        // Render all foods in a simple list
+        const html = foods.map(food => this.renderFoodItem(food)).join('');
         
         this.foodList.innerHTML = html;
         this.bindFoodEvents();
     }
 
-    groupFoodsByTime(foods) {
-        const grouped = {};
-        
-        foods.forEach(food => {
-            const hour = parseInt(food.eatenTime.split(':')[0]);
-            let timeGroup;
-            
-            if (hour < 11) {
-                timeGroup = 'Breakfast (Before 11 AM)';
-            } else if (hour < 15) {
-                timeGroup = 'Lunch (11 AM - 3 PM)';
-            } else if (hour < 19) {
-                timeGroup = 'Afternoon (3 PM - 7 PM)';
-            } else {
-                timeGroup = 'Dinner (After 7 PM)';
-            }
-            
-            if (!grouped[timeGroup]) {
-                grouped[timeGroup] = [];
-            }
-            grouped[timeGroup].push(food);
-        });
-        
-        // Sort foods within each group by time
-        Object.keys(grouped).forEach(key => {
-            grouped[key].sort((a, b) => a.eatenTime.localeCompare(b.eatenTime));
-        });
-        
-        return grouped;
-    }
-
     renderFoodItem(food) {
         const status = food.status === 'complete' ? '' : ' (incomplete)';
         const caloriesPerGram = food.weight > 0 ? (food.calories / food.weight) : 0;
-        
+        const perGramText = caloriesPerGram > 0 ? ` · ${Math.round(caloriesPerGram)} cal/g` : '';
+        const fromMeal = food.originalMealId ? '' : '';
+
         return `
-            <div class="food-item" data-food-id="${food.id}" 
+            <div class="food-item compact" data-food-id="${food.id}"
                  ontouchstart="window.app.eatManager.handleTouchStart(event, '${food.id}')"
                  ontouchend="window.app.eatManager.handleTouchEnd(event, '${food.id}')"
                  ontouchmove="window.app.eatManager.handleTouchMove(event)">
-                <div class="item-header">
-                    <span class="item-time">${food.eatenTime}</span>
-                    <div class="food-actions">
-                        <span class="food-source" title="${this.getSourceText(food.source)}">${this.getSourceIcon(food.source)}</span>
-                        <button class="btn-icon" onclick="window.app.eatManager.editFood('${food.id}')" title="Edit">✏️</button>
-                        <button class="btn-icon" onclick="window.app.eatManager.deleteFood('${food.id}')" title="Delete">🗑️</button>
-                    </div>
+                <span class="food-time">${this.formatTime24(food.eatenTime)}</span>
+                <span class="food-source" title="${this.getSourceText(food.source)}">${this.getSourceIcon(food.source)}</span>
+                <span class="food-text" title="${food.foodName} · ${food.weight}g · ${food.calories} cal${perGramText}">${food.foodName}${status} — ${food.weight}g · ${food.calories} cal${perGramText}</span>
+                <div class="food-actions">
+                    <button class="btn-icon" onclick="window.app.eatManager.editFood('${food.id}')" title="Edit">✏️</button>
+                    <button class="btn-icon" onclick="window.app.eatManager.deleteFood('${food.id}')" title="Delete">🗑️</button>
                 </div>
-                <div class="item-title">${food.foodName}${status}</div>
-                <div class="item-details">
-                    <span class="weight-calories">${food.weight}g - ${food.calories} cal</span>
-                    ${caloriesPerGram > 0 ? `<span class="calories-per-gram">(${Math.round(caloriesPerGram)} cal/g)</span>` : ''}
-                </div>
-                ${food.originalMealId ? `<div class="meal-reference">From cooked meal</div>` : ''}
             </div>
         `;
     }
@@ -1191,6 +1686,50 @@ class EatManager {
     bindFoodEvents() {
         // Touch events for swipe actions are handled via ontouchstart/end/move attributes
         // This ensures proper event binding even after dynamic content updates
+    }
+
+    // Open modal in create mode for manual entry
+    addFood() {
+        const modal = document.getElementById('foodDetailsModal');
+        const form = modal.querySelector('form');
+        delete modal.dataset.foodId; // ensure save treats this as new
+
+        // Clear form
+        form.reset?.();
+
+        // Defaults
+        const now = new Date();
+        const hh = now.getHours().toString().padStart(2, '0');
+        const mmRounded = Math.floor(now.getMinutes() / 5) * 5;
+        const mm = mmRounded.toString().padStart(2, '0');
+
+        form.querySelector('#foodName').value = '';
+        form.querySelector('#foodWeight').value = '';
+        form.querySelector('#foodCalories').value = '';
+        form.querySelector('#foodDate').value = this.currentDate;
+
+        const hourSelect = form.querySelector('#foodTimeHour');
+        const minuteSelect = form.querySelector('#foodTimeMinute');
+        const hiddenTime = form.querySelector('#foodTime');
+        if (hourSelect) hourSelect.value = hh;
+        if (minuteSelect) minuteSelect.value = mm;
+        if (hiddenTime) hiddenTime.value = `${hh}:${mm}`;
+
+        // Source shown as manual (read-only)
+        const sourceSel = form.querySelector('#foodSource');
+        if (sourceSel) sourceSel.value = 'manual';
+
+        // Reset calories per gram display
+        const cpg = form.querySelector('#calories-per-gram');
+        if (cpg) cpg.textContent = '-- cal/g';
+
+        // Bind live calc
+        const weightInput = form.querySelector('#foodWeight');
+        const caloriesInput = form.querySelector('#foodCalories');
+        weightInput.addEventListener('input', () => this.updateCaloriesPerGram());
+        caloriesInput.addEventListener('input', () => this.updateCaloriesPerGram());
+
+        this.showModal('foodDetailsModal');
     }
 
     // Touch handling for swipe actions
@@ -1268,20 +1807,30 @@ class EatManager {
         const modal = document.getElementById('foodDetailsModal');
         const form = modal.querySelector('form');
         modal.dataset.foodId = foodId;
+        const hourSelect = form.querySelector('#foodTimeHour');
+        const minuteSelect = form.querySelector('#foodTimeMinute');
+        const hiddenTime = form.querySelector('#foodTime');
         
-        // Populate form
-        form.querySelector('#food-name').value = food.foodName;
-        form.querySelector('#food-weight').value = food.weight;
-        form.querySelector('#food-calories').value = food.calories;
-        form.querySelector('#food-date').value = food.eatenDate;
-        form.querySelector('#food-time').value = food.eatenTime;
+        // Populate form - ensure time is in HH:MM format (24-hour)
+        form.querySelector('#foodName').value = food.foodName;
+        form.querySelector('#foodWeight').value = food.weight;
+        form.querySelector('#foodCalories').value = food.calories;
+        form.querySelector('#foodDate').value = food.eatenDate;
+        // Convert any time format to 24-hour HH:MM and split into selects
+        const hhmm = this.formatTime24(food.eatenTime);
+        const [hh, mmRaw] = hhmm.split(':');
+        const mm = (parseInt(mmRaw, 10) - (parseInt(mmRaw, 10) % 5)).toString().padStart(2, '0');
+        if (hourSelect) hourSelect.value = hh;
+        if (minuteSelect) minuteSelect.value = mm;
+        if (hiddenTime) hiddenTime.value = `${hh}:${mm}`;
+
         
         // Calculate and show calories per gram
         this.updateCaloriesPerGram();
         
         // Bind calorie calculation
-        const weightInput = form.querySelector('#food-weight');
-        const caloriesInput = form.querySelector('#food-calories');
+        const weightInput = form.querySelector('#foodWeight');
+        const caloriesInput = form.querySelector('#foodCalories');
         
         weightInput.addEventListener('input', () => this.updateCaloriesPerGram());
         caloriesInput.addEventListener('input', () => this.updateCaloriesPerGram());
@@ -1291,8 +1840,8 @@ class EatManager {
 
     updateCaloriesPerGram() {
         const form = document.querySelector('#foodDetailsModal form');
-        const weight = parseFloat(form.querySelector('#food-weight').value) || 0;
-        const calories = parseFloat(form.querySelector('#food-calories').value) || 0;
+        const weight = parseFloat(form.querySelector('#foodWeight').value) || 0;
+        const calories = parseFloat(form.querySelector('#foodCalories').value) || 0;
         const caloriesPerGramSpan = form.querySelector('#calories-per-gram');
         
         if (weight > 0 && calories > 0) {
@@ -1309,11 +1858,15 @@ class EatManager {
         const foodId = modal.dataset.foodId;
         
         const updatedFood = {
-            foodName: form.querySelector('#food-name').value,
-            weight: parseFloat(form.querySelector('#food-weight').value) || 0,
-            calories: parseFloat(form.querySelector('#food-calories').value) || 0,
-            eatenDate: form.querySelector('#food-date').value,
-            eatenTime: form.querySelector('#food-time').value
+            foodName: form.querySelector('#foodName').value,
+            weight: parseFloat(form.querySelector('#foodWeight').value) || 0,
+            calories: parseFloat(form.querySelector('#foodCalories').value) || 0,
+            eatenDate: form.querySelector('#foodDate').value,
+            eatenTime: (() => {
+                const hh = form.querySelector('#foodTimeHour')?.value || '00';
+                const mm = form.querySelector('#foodTimeMinute')?.value || '00';
+                return `${hh.padStart(2,'0')}:${mm.padStart(2,'0')}`;
+            })()
         };
         
         // Validation
@@ -1327,10 +1880,18 @@ class EatManager {
             return;
         }
         
-        // Update the food record
-        this.storage.updateEatingRecord(foodId, updatedFood);
+        if (foodId) {
+            // Update existing
+            this.storage.updateEatingRecord(foodId, updatedFood);
+        } else {
+            // Create new manual food record
+            this.storage.addEatingRecord({
+                ...updatedFood,
+                source: 'manual'
+            });
+        }
         
-        // If date changed, refresh current view
+        // If date changed relative to current view, inform and refresh
         if (updatedFood.eatenDate !== this.currentDate) {
             alert(`Food moved to ${new Date(updatedFood.eatenDate).toLocaleDateString()}`);
         }

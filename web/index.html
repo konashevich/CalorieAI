@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-GB">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -38,6 +38,8 @@
             <button id="installBtn" class="install-btn" style="display: none;">Install App</button>
             <button id="headerMenuBtn" class="header-menu-btn" aria-label="Open menu">⋮</button>
             <div id="headerMenu" class="header-menu" aria-hidden="true">
+                <button id="headerExportBtn" class="header-menu-item">Export Data</button>
+                <button id="headerImportBtn" class="header-menu-item">Import Data</button>
                 <button id="headerSettingsBtn" class="header-menu-item">Settings</button>
             </div>
         </header>
@@ -55,8 +57,8 @@
                         <button id="recordBtn" class="record-btn" aria-label="Start Recording">
                             <span class="record-icon">🎙️</span>
                         </button>
-                        <div class="recording-status" id="recordingStatus">Tap to record</div>
-                        <div class="recording-timer" id="recordingTimer">00:00</div>
+                        <div class="recording-status" id="recordingStatus" aria-live="polite"></div>
+                        <div class="recording-timer" id="recordingTimer" aria-hidden="true"></div>
                     </div>
                     
                     <div class="record-actions" id="recordActions" style="display: none;">
@@ -105,6 +107,14 @@
                 
                 <!-- Meals List -->
                 <div class="meals-section">
+                    <div class="section-header">
+                        <h3>Meals</h3>
+                        <button id="addMealBtn" class="btn-icon" title="Add cooked meal" aria-label="Add cooked meal">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="meals-list" id="mealsList">
                         <!-- Meals will be populated by JavaScript -->
                         <div class="empty-state">
@@ -112,6 +122,13 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Floating Add Button (visible on Cook page) -->
+                <button id="fabAddMeal" class="fab-add" title="Add cooked meal" aria-label="Add cooked meal">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                    </svg>
+                </button>
             </section>
 
             <!-- Meal Details Modal -->
@@ -120,13 +137,83 @@
                     <div class="modal-header">
                         <h3 id="mealDetailsTitle">Meal Details</h3>
                         <div class="modal-actions">
-                            <button class="action-btn edit" id="editMealBtn">✏️</button>
-                            <button class="action-btn delete" id="deleteMealBtn">🗑️</button>
+                            <button class="btn-icon" id="editMealBtn" title="Edit meal" aria-label="Edit meal">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l9.06-9.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                                </svg>
+                            </button>
+                            <button class="btn-icon" id="deleteMealBtn" title="Delete meal" aria-label="Delete meal">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                </svg>
+                            </button>
                             <button class="modal-close" id="closeMealModal">&times;</button>
                         </div>
                     </div>
                     <div class="modal-body" id="mealDetailsBody">
                         <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Cooked Meal Modal -->
+            <div class="modal" id="mealCreateModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="mealCreateTitle">Add Cooked Meal</h3>
+                        <button class="modal-close" id="closeMealCreate">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="mealCreateForm">
+                            <div class="form-group">
+                                <label for="mealName">Meal Name</label>
+                                <input type="text" id="mealName" class="form-input" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="mealTotalWeight">Total Weight (g)</label>
+                                    <input type="number" id="mealTotalWeight" class="form-input" min="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mealTotalCalories">Total Calories</label>
+                                    <input type="number" id="mealTotalCalories" class="form-input" min="0" step="1">
+                                </div>
+                            </div>
+                            <!-- Ingredients Editor -->
+                            <div class="form-group">
+                                <label>Ingredients</label>
+                                <div id="ingredientsEditor">
+                                    <div class="ingredient-inputs form-row" style="margin-bottom: 0.75rem;">
+                                        <input type="text" id="ingName" class="form-input" placeholder="Name">
+                                        <input type="number" id="ingWeight" class="form-input" placeholder="Weight (g)" min="0">
+                                        <input type="number" id="ingCals100" class="form-input" placeholder="Cal/100g" min="0">
+                                        <button type="button" id="addIngredientBtn" class="action-btn primary" title="Add ingredient">Add</button>
+                                    </div>
+                                    <div id="ingredientsList" class="ingredients-list" aria-live="polite"></div>
+                                    <div id="ingredientsTotals" class="form-help" style="margin-top: 8px;">Totals: 0 g, 0 cal</div>
+                                </div>
+                                <div class="form-help">When ingredients are present, total weight and calories will be recalculated automatically on Save.</div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="mealDate">Cooked Date</label>
+                                    <input type="date" id="mealDate" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mealTime">Cooked Time</label>
+                                    <div class="time-24-wrapper">
+                                        <select id="mealTimeHour" class="form-input" aria-label="Hour"></select>
+                                        <span>:</span>
+                                        <select id="mealTimeMinute" class="form-input" aria-label="Minute"></select>
+                                        <input type="hidden" id="mealTime">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="action-btn secondary" id="cancelMealCreate">Cancel</button>
+                                <button type="submit" class="action-btn primary">Save Meal</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -155,7 +242,14 @@
 
                 <!-- Food Items List -->
                 <div class="food-section">
-                    <h3>Food Items</h3>
+                    <div class="section-header">
+                        <h3>Food Items</h3>
+                        <button id="addFoodBtn" class="btn-icon" title="Add food manually" aria-label="Add food manually">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="food-list" id="foodList">
                         <!-- Food items will be populated by JavaScript -->
                         <div class="empty-state">
@@ -163,6 +257,13 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Floating Add Button (visible on Eat page) -->
+                <button id="fabAddFood" class="fab-add" title="Add food" aria-label="Add food">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                    </svg>
+                </button>
             </section>
 
             <!-- Food Item Details Modal -->
@@ -196,6 +297,9 @@
                             <div class="form-group">
                                 <label for="foodCalories">Calories</label>
                                 <input type="number" id="foodCalories" class="form-input" min="0" required>
+                                <div class="calories-per-gram-display">
+                                    <span id="calories-per-gram">-- cal/g</span>
+                                </div>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
@@ -203,8 +307,14 @@
                                     <input type="date" id="foodDate" class="form-input" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="foodTime">Time</label>
-                                    <input type="time" id="foodTime" class="form-input" required>
+                                    <label for="foodTimeHour">Time</label>
+                                    <div class="time-24-wrapper">
+                                        <select id="foodTimeHour" class="form-input" title="Hour (00-23)"></select>
+                                        <span>:</span>
+                                        <select id="foodTimeMinute" class="form-input" title="Minute (00-59)"></select>
+                                    </div>
+                                    <!-- Hidden combined value persisted as HH:MM -->
+                                    <input type="hidden" id="foodTime" required>
                                 </div>
                             </div>
                             <div class="form-group">
@@ -288,13 +398,13 @@
     </div>
 
     <!-- Protocol Warning -->
-    <div class="protocol-warning" id="protocolWarning" style="display: none;">
+    <div class="protocol-warning hidden" id="protocolWarning">
         <div class="warning-content">
             <h3>⚠️ Limited Functionality</h3>
             <p>For full features including voice recording and PWA capabilities, please run:</p>
             <code>python -m http.server 8000</code>
             <p>Then visit: <a href="http://localhost:8000">http://localhost:8000</a></p>
-            <button onclick="document.getElementById('protocolWarning').style.display='none'">Continue Anyway</button>
+            <button onclick="document.getElementById('protocolWarning').classList.add('hidden')">Continue Anyway</button>
         </div>
     </div>
 
@@ -319,7 +429,7 @@
     <script>
         // Check protocol and show warning if needed
         if (window.location.protocol === 'file:') {
-            document.getElementById('protocolWarning').style.display = 'flex';
+            document.getElementById('protocolWarning').classList.remove('hidden');
         }
 
         function generateDemo() {

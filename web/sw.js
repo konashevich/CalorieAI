@@ -3,9 +3,9 @@
  * Handles offline functionality, caching, and background sync
  */
 
-const CACHE_NAME = 'calorieai-v1.0.0';
-const STATIC_CACHE = 'calorieai-static-v1.0.0';
-const DATA_CACHE = 'calorieai-data-v1.0.0';
+const CACHE_NAME = 'calorieai-v1.0.10';
+const STATIC_CACHE = 'calorieai-static-v1.0.10';
+const DATA_CACHE = 'calorieai-data-v1.0.10';
 
 // Files to cache for offline use
 const STATIC_FILES = [
@@ -82,6 +82,15 @@ self.addEventListener('activate', event => {
             console.error('CalorieAI Service Worker: Activation failed', error);
         })
     );
+});
+
+// Allow page to request immediate activation of a waiting SW
+self.addEventListener('message', event => {
+    const data = event.data;
+    if (!data) return;
+    if (data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });
 
 // Fetch event - handle network requests
