@@ -39,6 +39,7 @@
     <allow-navigation href="*" />
 
     <!-- Core Cordova Plugins -->
+    <plugin name="cordova-plugin-media-capture" spec="^6.0.0" />
     <plugin name="cordova-plugin-media" spec="^7.0.0" />
     <plugin name="cordova-plugin-camera" spec="^7.0.0" />
     <plugin name="cordova-plugin-file" spec="^8.0.0" />
