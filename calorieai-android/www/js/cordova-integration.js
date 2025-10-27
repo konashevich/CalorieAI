@@ -227,14 +227,15 @@ const CordovaIntegration = {
             // Request Android runtime permissions
             if (window.cordova && window.cordova.plugins && window.cordova.plugins.permissions) {
                 const permissions = window.cordova.plugins.permissions;
-                const permissionsToRequest = [
-                    permissions.RECORD_AUDIO,
-                    permissions.CAMERA,
-                    permissions.WRITE_EXTERNAL_STORAGE,
-                    permissions.READ_EXTERNAL_STORAGE
-                ];
+                const list = [];
+                // Core permissions
+                if (permissions.RECORD_AUDIO) list.push(permissions.RECORD_AUDIO);
+                if (permissions.CAMERA) list.push(permissions.CAMERA);
+                if (permissions.WRITE_EXTERNAL_STORAGE) list.push(permissions.WRITE_EXTERNAL_STORAGE);
+                if (permissions.READ_EXTERNAL_STORAGE) list.push(permissions.READ_EXTERNAL_STORAGE);
+                // Android 13+ media read permission (if exposed by plugin)
+                if (permissions.READ_MEDIA_AUDIO) list.push(permissions.READ_MEDIA_AUDIO);
                 
-                // Check if we have permissions
                 const checkPermission = (permission) => {
                     return new Promise((res) => {
                         permissions.checkPermission(permission, (status) => {
@@ -242,7 +243,6 @@ const CordovaIntegration = {
                                 console.log(`Permission ${permission} already granted`);
                                 res(true);
                             } else {
-                                // Request permission
                                 permissions.requestPermission(permission, (status) => {
                                     if (status.hasPermission) {
                                         console.log(`Permission ${permission} granted`);
@@ -263,8 +263,7 @@ const CordovaIntegration = {
                     });
                 };
                 
-                // Request all permissions
-                Promise.all(permissionsToRequest.map(checkPermission)).then((results) => {
+                Promise.all(list.map(checkPermission)).then((results) => {
                     const allGranted = results.every(r => r === true);
                     if (allGranted) {
                         console.log('All permissions granted');

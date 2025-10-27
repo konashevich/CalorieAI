@@ -85,6 +85,17 @@ class AudioManager {
                 }
             }
 
+            // If Cordova plugins are not ready yet, wait for deviceready and retry
+            if (!window.Media && !(navigator.device && navigator.device.capture)) {
+                this.updateStatus('Preparing recorder...');
+                const retryOnReady = () => {
+                    document.removeEventListener('deviceready', retryOnReady, false);
+                    this.startCordovaRecording();
+                };
+                document.addEventListener('deviceready', retryOnReady, false);
+                return;
+            }
+
             // Prefer native media-capture on Android for reliability
             if (navigator.device && navigator.device.capture && navigator.device.capture.captureAudio) {
                 const options = { limit: 1, duration: 3600 };
