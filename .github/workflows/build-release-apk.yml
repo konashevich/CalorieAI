@@ -45,6 +45,15 @@ jobs:
       working-directory: ./calorieai-android
       run: cordova platform add android@latest
       
+    - name: Install Cordova plugins
+      working-directory: ./calorieai-android
+      run: |
+        cordova plugin add cordova-plugin-media-capture
+        cordova plugin add cordova-plugin-file
+        cordova plugin add cordova-plugin-camera
+        cordova plugin add cordova-plugin-device
+        cordova plugin add cordova-plugin-network-information
+      
     - name: Copy latest web files to Cordova
       run: |
         rm -rf calorieai-android/www/*
