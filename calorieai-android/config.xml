@@ -12,8 +12,6 @@
     <preference name="BackgroundColor" value="0xffffffff" />
     <preference name="Orientation" value="portrait" />
     <preference name="Fullscreen" value="false" />
-    <preference name="StatusBarBackgroundColor" value="#2196F3" />
-    <preference name="StatusBarStyle" value="default" />
     
     <!-- Android-specific Preferences -->
     <platform name="android">
