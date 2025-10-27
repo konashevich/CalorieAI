@@ -66,7 +66,6 @@ class AudioManager {
             // Request permissions if needed
             if (window.cordova && window.cordova.plugins && window.cordova.plugins.permissions) {
                 const permissions = window.cordova.plugins.permissions;
-                
                 // Check RECORD_AUDIO permission
                 const hasPermission = await new Promise((resolve) => {
                     permissions.checkPermission(permissions.RECORD_AUDIO, (status) => {
@@ -80,22 +79,100 @@ class AudioManager {
                         }
                     }, () => resolve(false));
                 });
-                
                 if (!hasPermission) {
                     this.showError('Microphone permission is required to record audio.');
                     return;
                 }
             }
-            
-            const fileName = `calorieai_recording_${Date.now()}.wav`;
-            this.cordovaAudioPath = cordova.file.dataDirectory + fileName;
-    
+
+            // Prefer native media-capture on Android for reliability
+            if (navigator.device && navigator.device.capture && navigator.device.capture.captureAudio) {
+                const options = { limit: 1, duration: 3600 };
+                this.isRecording = true;
+                this.recordingStartTime = Date.now();
+                this.updateRecordingUI();
+                this.startTimer();
+
+                navigator.device.capture.captureAudio(async (mediaFiles) => {
+                    try {
+                        this.stopTimer();
+                        this.isRecording = false;
+                        this.updateRecordingUI();
+
+                        if (!mediaFiles || mediaFiles.length === 0) {
+                            this.showError('No audio recorded.');
+                            return;
+                        }
+
+                        const fileInfo = mediaFiles[0];
+                        const src = fileInfo.fullPath || fileInfo.localURL || fileInfo.path;
+                        if (!src) {
+                            console.error('captureAudio: No path in media file', fileInfo);
+                            this.showError('Could not access recorded audio file.');
+                            return;
+                        }
+
+                        const fileEntry = await this.resolveFile(src);
+                        const file = await this.getFile(fileEntry); // Returns a File object (Blob)
+
+                        // Derive mime type if available, else fallback
+                        const mime = file.type || fileInfo.type || 'audio/3gpp';
+                        const audioBlob = file; // File is already a Blob
+
+                        this.currentRecording = {
+                            blob: audioBlob,
+                            mimeType: mime,
+                            size: audioBlob.size,
+                            duration: this.getRecordingDuration()
+                        };
+
+                        if (this.elements.recordActions) this.elements.recordActions.style.display = 'flex';
+                        if (this.elements.sendBtn) this.elements.sendBtn.disabled = false;
+                        this.updateStatus('Recording saved. Click "Send to AI" to process.');
+
+                        if (this.autoSendAfterStop) {
+                            this.autoSendAfterStop = false;
+                            setTimeout(() => this.sendToAI(), 50);
+                        }
+                    } catch (err) {
+                        console.error('Error handling captured audio:', err);
+                        this.showError('Failed to access captured audio.');
+                        this.resetRecordingUI();
+                    }
+                }, (error) => {
+                    console.error('Media capture error:', error);
+                    this.stopTimer();
+                    this.isRecording = false;
+                    this.resetRecordingUI();
+                    // Provide more actionable error messages
+                    const msg = (error && error.code === 3)
+                        ? 'Recording canceled.'
+                        : 'Failed to start the native recorder. Please check microphone permissions.';
+                    this.showError(msg);
+                }, options);
+
+                return; // Done with media-capture path
+            }
+
+            // Fallback: use cordova-plugin-media direct recording
+            const fileName = `calorieai_recording_${Date.now()}.3gp`; // Use Android-friendly format
+            this.cordovaAudioPath = (window.cordova && window.cordova.file && window.cordova.file.dataDirectory)
+                ? window.cordova.file.dataDirectory + fileName
+                : fileName; // Fallback to local filename
+
             this.cordovaMedia = new Media(this.cordovaAudioPath,
                 () => console.log('Cordova Media success'),
                 (err) => console.error('Cordova Media error:', err)
             );
-    
-            this.cordovaMedia.startRecord();
+
+            try {
+                this.cordovaMedia.startRecord();
+            } catch (e) {
+                console.error('startRecord threw:', e);
+                this.showError('Failed to access microphone (startRecord).');
+                return;
+            }
+
             this.isRecording = true;
             this.recordingStartTime = Date.now();
             this.updateRecordingUI();
@@ -161,6 +238,10 @@ class AudioManager {
             // The success callback of the Media object will handle the processing
             this.cordovaMedia.release();
             this.processCordovaRecording();
+        } else if (this.isCordova() && !this.cordovaMedia) {
+            // Likely recording via native capture UI; cannot stop programmatically
+            this.showError('Recording is running in the native recorder. Please stop or cancel it using the system UI.');
+            return;
         } else if (this.mediaRecorder) {
             this.mediaRecorder.stop();
             this.isRecording = false;
