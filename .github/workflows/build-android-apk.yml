@@ -54,10 +54,16 @@ jobs:
         cordova plugin add cordova-plugin-device
         cordova plugin add cordova-plugin-network-information
       
-    - name: Copy latest web files to Cordova
+    - name: Sync web files to Cordova (preserve Cordova-specific files)
       run: |
-        rm -rf calorieai-android/www/*
-        cp -r web/* calorieai-android/www/
+        # DO NOT delete entire www folder - it has Cordova-specific files
+        # Only sync HTML, CSS, JS, and assets from web
+        cp web/index.html calorieai-android/www/
+        cp web/manifest.json calorieai-android/www/
+        cp web/sw.js calorieai-android/www/
+        cp -r web/css calorieai-android/www/
+        cp -r web/js calorieai-android/www/
+        cp -r web/assets calorieai-android/www/
         
     - name: Build Debug APK
       working-directory: ./calorieai-android

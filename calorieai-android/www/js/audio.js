@@ -1,18 +1,17 @@
 /**
- * Audio Manager
- * Handles MediaRecorder API for voice recording functionality
+ * Audio Manager - Android-optimized with forced permission prompts
  */
-
 class AudioManager {
     constructor() {
         this.mediaRecorder = null;
         this.audioChunks = [];
         this.audioStream = null;
         this.isRecording = false;
-        this.autoSendAfterStop = false; // if true, stop -> process -> send
+        this.autoSendAfterStop = false;
         this.recordingTimer = null;
         this.recordingStartTime = null;
-        this.microphonePermission = false;
+        this.cordovaMedia = null;
+        this.cordovaAudioPath = null;
         
         this.elements = {
             recordBtn: document.getElementById('recordBtn'),
@@ -24,461 +23,310 @@ class AudioManager {
             recordingSection: document.querySelector('.recording-section')
         };
 
-        // Debug: Check if elements exist
-        console.log('AudioManager elements:', this.elements);
-
         this.init();
     }
 
     async init() {
-        try {
-            this.bindEvents();
-            // Don't check microphone permission during init - do it when user clicks record
-        } catch (error) {
-            console.error('Audio Manager initialization error:', error);
+        console.log('[AudioManager] Initializing...', { isCordova: this.isCordova() });
+        this.bindEvents();
+        
+        // On Cordova, wait for deviceready before requesting permissions
+        if (this.isCordova()) {
+            if (document.readyState === 'complete' || typeof cordova !== 'undefined') {
+                this.requestInitialPermissions();
+            } else {
+                document.addEventListener('deviceready', () => this.requestInitialPermissions(), false);
+            }
         }
     }
 
-    async checkMicrophonePermission() {
-        try {
-            // Check if browser supports MediaRecorder
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                throw new Error('MediaRecorder API not supported');
-            }
+    isCordova() { return typeof cordova !== 'undefined'; }
 
-            // Request microphone permission
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach(track => track.stop()); // Stop immediately after permission check
-            
-            console.log('Microphone permission granted');
-            return true;
-        } catch (error) {
-            console.error('Microphone permission denied or not available:', error);
-            this.showError('Microphone access is required for recording. Please allow microphone permission and refresh the page.');
-            return false;
+    async requestInitialPermissions() {
+        console.log('[AudioManager] Requesting initial permissions...');
+        try {
+            if (window.cordova?.plugins?.permissions) {
+                const perms = window.cordova.plugins.permissions;
+                // Force request on startup
+                perms.requestPermission(perms.RECORD_AUDIO, 
+                    (status) => console.log('[AudioManager] Permission granted:', status.hasPermission),
+                    (error) => console.warn('[AudioManager] Permission denied:', error)
+                );
+            }
+        } catch (e) {
+            console.error('[AudioManager] Initial permission request failed:', e);
         }
     }
 
     bindEvents() {
         if (this.elements.recordBtn) {
             this.elements.recordBtn.addEventListener('click', () => {
-                if (this.isRecording) {
-                    this.stopRecording();
-                } else {
-                    this.startRecording();
-                }
+                if (this.isRecording) this.stopRecording(); else this.startRecording();
             });
         }
-
-        if (this.elements.stopBtn) {
-            this.elements.stopBtn.addEventListener('click', () => {
-                this.stopRecording();
-            });
-        }
-
+        if (this.elements.stopBtn) this.elements.stopBtn.addEventListener('click', () => this.stopRecording());
         if (this.elements.sendBtn) {
             this.elements.sendBtn.addEventListener('click', () => {
-                console.log('Send button clicked, currentRecording:', this.currentRecording);
-                // One-click experience: if recording, stop and auto-send
-                if (this.isRecording) {
-                    this.autoSendAfterStop = true;
-                    this.updateStatus('Stopping and sending to AI...');
-                    this.stopRecording();
-                } else {
-                    this.sendToAI();
-                }
+                if (this.isRecording) { this.autoSendAfterStop = true; this.updateStatus('Stopping and sending to AI...'); this.stopRecording(); }
+                else { this.sendToAI(); }
             });
-        } else {
-            console.error('Send button element not found');
         }
+    }
+
+    async requestMicPermission() {
+        console.log('[AudioManager] Requesting mic permission...');
+        
+        // Strategy 1: Cordova permission plugin
+        if (window.cordova?.plugins?.permissions) {
+            const perms = window.cordova.plugins.permissions;
+            const granted = await new Promise((resolve) => {
+                perms.requestPermission(perms.RECORD_AUDIO, 
+                    (status) => {
+                        console.log('[AudioManager] Cordova permission result:', status.hasPermission);
+                        resolve(status.hasPermission);
+                    },
+                    () => {
+                        console.warn('[AudioManager] Cordova permission request failed');
+                        resolve(false);
+                    }
+                );
+            });
+            if (granted) return true;
+        }
+
+        // Strategy 2: Trigger native recorder (forces permission on first use)
+        if (navigator.device?.capture?.captureAudio) {
+            console.log('[AudioManager] Using native capture to trigger permission');
+            return true; // captureAudio will handle permission itself
+        }
+
+        // Strategy 3: getUserMedia fallback
+        if (navigator.mediaDevices?.getUserMedia) {
+            try {
+                console.log('[AudioManager] Using getUserMedia for permission');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(t => t.stop());
+                return true;
+            } catch (e) {
+                console.error('[AudioManager] getUserMedia permission failed:', e);
+            }
+        }
+
+        return false;
     }
 
     async startRecording() {
+        console.log('[AudioManager] Start recording requested');
+        
+        // Always request permission before attempting to record
+        const hasPermission = await this.requestMicPermission();
+        if (!hasPermission && !navigator.device?.capture?.captureAudio) {
+            this.showError('Microphone permission required. Please enable it in Settings → Apps → CalorieAI → Permissions.');
+            return;
+        }
+
+        if (this.isCordova()) await this.startCordovaRecording(); 
+        else await this.startWebRecording();
+    }
+
+    async startCordovaRecording() {
+        console.log('[AudioManager] Starting Cordova recording...');
+        
         try {
-            // Check if browser supports MediaRecorder
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                throw new Error('MediaRecorder API not supported in this browser');
+            // Use native media capture (most reliable, handles permissions automatically)
+            if (navigator.device?.capture?.captureAudio) {
+                console.log('[AudioManager] Using native media capture');
+                const options = { limit: 1, duration: 3600 };
+                this.isRecording = true; 
+                this.recordingStartTime = Date.now(); 
+                this.updateRecordingUI(); 
+                this.startTimer();
+                
+                navigator.device.capture.captureAudio(async (mediaFiles) => {
+                    console.log('[AudioManager] Capture success:', mediaFiles);
+                    try {
+                        this.stopTimer(); this.isRecording = false; this.updateRecordingUI();
+                        if (!mediaFiles?.length) { this.showError('No audio recorded.'); return; }
+                        
+                        const info = mediaFiles[0];
+                        const src = info.fullPath || info.localURL || info.path;
+                        if (!src) { 
+                            console.error('[AudioManager] No path in capture result:', info); 
+                            this.showError('Could not access recorded audio file.'); 
+                            return; 
+                        }
+                        
+                        const fileEntry = await this.resolveFile(src);
+                        const file = await this.getFile(fileEntry);
+                        const mime = file.type || info.type || 'audio/3gpp';
+                        
+                        this.currentRecording = { 
+                            blob: file, 
+                            mimeType: mime, 
+                            size: file.size, 
+                            duration: this.getRecordingDuration() 
+                        };
+                        
+                        if (this.elements.recordActions) this.elements.recordActions.style.display = 'flex';
+                        if (this.elements.sendBtn) this.elements.sendBtn.disabled = false;
+                        this.updateStatus('Recording saved. Click "Send to AI" to process.');
+                        
+                        if (this.autoSendAfterStop) { 
+                            this.autoSendAfterStop = false; 
+                            setTimeout(() => this.sendToAI(), 50); 
+                        }
+                    } catch (e) { 
+                        console.error('[AudioManager] Capture processing error:', e); 
+                        this.showError('Failed to process captured audio.'); 
+                        this.resetRecordingUI(); 
+                    }
+                }, (error) => {
+                    console.error('[AudioManager] Capture error:', error);
+                    this.stopTimer(); this.isRecording = false; this.resetRecordingUI();
+                    const msg = (error?.code === 3) ? 'Recording canceled.' : 
+                                'Failed to start recorder. Check Settings → Apps → CalorieAI → Permissions → Microphone.';
+                    this.showError(msg);
+                }, options);
+                return;
             }
 
-            // Get media stream
-            this.audioStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    sampleRate: 16000
-                }
-            });
-
-            this.microphonePermission = true;
-
-            // Determine the best supported format
-            const options = this.getSupportedMimeType();
+            // Fallback: Direct Media plugin recording
+            console.log('[AudioManager] Using Media plugin fallback');
+            const fileName = `calorieai_${Date.now()}.3gp`;
+            this.cordovaAudioPath = (window.cordova?.file?.dataDirectory || '') + fileName;
             
-            // Create MediaRecorder
-            this.mediaRecorder = new MediaRecorder(this.audioStream, options);
+            this.cordovaMedia = new Media(this.cordovaAudioPath, 
+                () => console.log('[AudioManager] Media success'),
+                (err) => console.error('[AudioManager] Media error:', err)
+            );
             
-            this.audioChunks = [];
-            this.recordingStartTime = Date.now();
-
-            // Event handlers
-            this.mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    this.audioChunks.push(event.data);
-                }
-            };
-
-            this.mediaRecorder.onstop = () => {
-                // Small delay to ensure all data is available
-                setTimeout(() => {
-                    this.processRecording();
-                }, 100);
-            };
-
-            this.mediaRecorder.onerror = (event) => {
-                console.error('MediaRecorder error:', event.error);
-                this.showError('Recording error occurred. Please try again.');
-                this.resetRecordingUI();
-            };
-
-            // Start recording
-            this.mediaRecorder.start(1000); // Collect data every second
-            this.isRecording = true;
-            
-            this.updateRecordingUI();
+            this.cordovaMedia.startRecord();
+            this.isRecording = true; 
+            this.recordingStartTime = Date.now(); 
+            this.updateRecordingUI(); 
             this.startTimer();
-
         } catch (error) {
-            console.error('Error starting recording:', error);
-            this.showError('Failed to start recording. Please check your microphone.');
+            console.error('[AudioManager] Cordova recording start failed:', error);
+            this.showError('Recording failed. Enable microphone in Settings → Apps → CalorieAI → Permissions.');
         }
+    }
+
+    async startWebRecording() {
+        try {
+            if (!navigator.mediaDevices?.getUserMedia) throw new Error('MediaRecorder API not supported');
+            this.audioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
+            const options = this.getSupportedMimeType();
+            this.mediaRecorder = new MediaRecorder(this.audioStream, options);
+            this.audioChunks = []; this.recordingStartTime = Date.now();
+            this.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) this.audioChunks.push(e.data); };
+            this.mediaRecorder.onstop = () => setTimeout(() => this.processRecording(), 100);
+            this.mediaRecorder.onerror = (e) => { console.error('[AudioManager] MediaRecorder error:', e.error); this.showError('Recording error occurred.'); this.resetRecordingUI(); };
+            this.mediaRecorder.start(1000); this.isRecording = true; this.updateRecordingUI(); this.startTimer();
+        } catch (error) { console.error('[AudioManager] Web recording start failed:', error); this.showError('Failed to start recording.'); }
     }
 
     stopRecording() {
-        if (this.mediaRecorder && this.isRecording) {
-            this.mediaRecorder.stop();
-            this.isRecording = false;
-            
-            // Stop audio stream
-            if (this.audioStream) {
-                this.audioStream.getTracks().forEach(track => track.stop());
-            }
-            
-            this.stopTimer();
-            this.updateRecordingUI();
+        if (!this.isRecording) return;
+        if (this.isCordova() && this.cordovaMedia) {
+            this.cordovaMedia.stopRecord(); this.isRecording = false; this.stopTimer(); this.updateRecordingUI(); this.cordovaMedia.release(); this.processCordovaRecording();
+        } else if (this.isCordova() && !this.cordovaMedia) {
+            this.showError('Recording is running in the native recorder. Stop it using the system UI.'); return;
+        } else if (this.mediaRecorder) {
+            this.mediaRecorder.stop(); this.isRecording = false; if (this.audioStream) this.audioStream.getTracks().forEach(t => t.stop()); this.stopTimer(); this.updateRecordingUI();
         }
     }
 
-    async processRecording() {
-        if (this.audioChunks.length === 0) {
-            this.showError('No audio data recorded. Please try again.');
-            this.resetRecordingUI();
-            return;
-        }
-
+    async processCordovaRecording() {
         try {
-            // Create blob from chunks
-            const audioBlob = new Blob(this.audioChunks, { 
-                type: this.mediaRecorder.mimeType 
-            });
-
-            this.currentRecording = {
-                blob: audioBlob,
-                mimeType: this.mediaRecorder.mimeType,
-                size: audioBlob.size,
-                duration: this.getRecordingDuration()
-            };
-
-            // Show record actions and enable send button
-            if (this.elements.recordActions) {
-                this.elements.recordActions.style.display = 'flex';
-            }
-            
-            if (this.elements.sendBtn) {
-                this.elements.sendBtn.disabled = false; // ensure enabled after recording
-            }
-
-            // Update status
+            const fe = await this.resolveFile(this.cordovaAudioPath);
+            const file = await this.getFile(fe);
+            const mimeType = file.type || 'audio/3gpp';
+            this.currentRecording = { blob: file, mimeType, size: file.size, duration: this.getRecordingDuration() };
+            if (this.elements.recordActions) this.elements.recordActions.style.display = 'flex'; if (this.elements.sendBtn) this.elements.sendBtn.disabled = false;
             this.updateStatus('Recording saved. Click "Send to AI" to process.');
+            if (this.autoSendAfterStop) { this.autoSendAfterStop = false; setTimeout(() => this.sendToAI(), 50); }
+        } catch (error) { console.error('[AudioManager] Cordova processing failed:', error); this.showError('Failed to process recording.'); this.resetRecordingUI(); }
+    }
 
-            // If user clicked Send while recording, auto-send now
-            if (this.autoSendAfterStop) {
-                this.autoSendAfterStop = false;
-                // Defer slightly to allow UI to update
-                setTimeout(() => this.sendToAI(), 50);
-            }
-        } catch (error) {
-            console.error('Error processing recording:', error);
-            this.showError('Failed to process recording. Please try again.');
-            this.resetRecordingUI();
-        }
+    resolveFile(path) { return new Promise((resolve, reject) => { window.resolveLocalFileSystemURL(path, resolve, reject); }); }
+    getFile(fileEntry) { return new Promise((resolve, reject) => { fileEntry.file(resolve, reject); }); }
+
+    async processRecording() {
+        if (this.audioChunks.length === 0) { this.showError('No audio data recorded.'); this.resetRecordingUI(); return; }
+        try {
+            const audioBlob = new Blob(this.audioChunks, { type: this.mediaRecorder.mimeType });
+            this.currentRecording = { blob: audioBlob, mimeType: this.mediaRecorder.mimeType, size: audioBlob.size, duration: this.getRecordingDuration() };
+            if (this.elements.recordActions) this.elements.recordActions.style.display = 'flex'; if (this.elements.sendBtn) this.elements.sendBtn.disabled = false;
+            this.updateStatus('Recording saved. Click "Send to AI" to process.');
+            if (this.autoSendAfterStop) { this.autoSendAfterStop = false; setTimeout(() => this.sendToAI(), 50); }
+        } catch (error) { console.error('[AudioManager] Web processing failed:', error); this.showError('Failed to process recording.'); this.resetRecordingUI(); }
     }
 
     async sendToAI() {
-        if (!this.currentRecording) {
-            this.showError('No recording to send. Please record audio first.');
-            return;
-        }
-
+        if (!this.currentRecording) { this.showError('No recording to send.'); return; }
         try {
-            // Show loading
             this.showLoading('Processing with AI...');
-
-            // Save to storage first (metadata in localStorage)
-            const recordData = {
-                filename: `recording_${Date.now()}.webm`,
-                mimeType: this.currentRecording.mimeType,
-                size: this.currentRecording.size,
-                duration: this.currentRecording.duration
-            };
-
+            const ext = (() => { const mt = (this.currentRecording.mimeType || '').toLowerCase(); if (mt.includes('webm')) return 'webm'; if (mt.includes('3gpp') || mt.includes('3gp')) return '3gp'; if (mt.includes('mp4') || mt.includes('m4a') || mt.includes('aac')) return 'm4a'; if (mt.includes('wav')) return 'wav'; return this.isCordova() ? '3gp' : 'webm'; })();
+            const recordData = { filename: `recording_${Date.now()}.${ext}`, mimeType: this.currentRecording.mimeType, size: this.currentRecording.size, duration: this.currentRecording.duration };
             const savedRecord = window.app.storage.addAudioRecord(recordData);
-
-            // Save audio blob to IndexedDB
-            if (window.app.pwa && window.app.pwa.indexedDB) {
-                await window.app.pwa.indexedDB.storeAudioFile(
-                    savedRecord.id, 
-                    this.currentRecording.blob,
-                    {
-                        filename: recordData.filename,
-                        mimeType: recordData.mimeType
-                    }
-                );
-            }
-
-            // Send to AI service (check if online)
+            if (window.app.pwa?.indexedDB) await window.app.pwa.indexedDB.storeAudioFile(savedRecord.id, this.currentRecording.blob, { filename: recordData.filename, mimeType: recordData.mimeType });
             if (navigator.onLine) {
-                // Process with AI
                 const aiManager = window.app.getActiveAIManager();
                 const aiResponse = await aiManager.processAudio(this.currentRecording);
-                
-                // Update record with transcription
-                window.app.storage.updateAudioRecord(savedRecord.id, {
-                    transcribed: true,
-                    transcriptionData: JSON.stringify(aiResponse)
-                });
-
-                // Handle AI response (save to appropriate storage)
+                window.app.storage.updateAudioRecord(savedRecord.id, { transcribed: true, transcriptionData: JSON.stringify(aiResponse) });
                 await aiManager.handleAIResponse(aiResponse, savedRecord.id);
-
-                this.hideLoading();
-                this.showSuccess('Recording processed and saved!');
+                this.hideLoading(); this.showSuccess('Recording processed and saved!');
             } else {
-                // Queue for offline processing
-                if (window.app.pwa && window.app.pwa.indexedDB) {
-                    await window.app.pwa.indexedDB.queueOfflineRequest({
-                        type: 'ai-transcription',
-                        recordId: savedRecord.id,
-                        audioBlob: this.currentRecording.blob
-                    });
-                }
-
-                this.hideLoading();
-                this.showSuccess('Recording saved. Will process when online.');
+                if (window.app.pwa?.indexedDB) await window.app.pwa.indexedDB.queueOfflineRequest({ type: 'ai-transcription', recordId: savedRecord.id, audioBlob: this.currentRecording.blob });
+                this.hideLoading(); this.showSuccess('Recording saved. Will process when online.');
             }
-
-            this.resetRecordingUI();
-            this.currentRecording = null;
-            
-            // Refresh records list
-            if (window.app && window.app.recordManager) {
-                window.app.recordManager.refreshRecordsList();
-            }
-
-        } catch (error) {
-            console.error('Error sending to AI:', error);
-            this.hideLoading();
-            // Show specific error message if it's an API key issue
-            if (error.message && error.message.includes('API key')) {
-                this.showError(error.message);
-            } else {
-                this.showError('Failed to process recording. Please try again.');
-            }
-        }
+            this.resetRecordingUI(); this.currentRecording = null; if (window.app?.recordManager) window.app.recordManager.refreshRecordsList();
+        } catch (error) { console.error('[AudioManager] AI send failed:', error); this.hideLoading(); if (error.message?.includes('API key')) this.showError(error.message); else this.showError('Failed to process recording.'); }
     }
 
-    getSupportedMimeType() {
-        const possibleTypes = [
-            'audio/webm;codecs=opus',
-            'audio/webm',
-            'audio/mp4',
-            'audio/wav'
-        ];
-
-        for (let type of possibleTypes) {
-            if (MediaRecorder.isTypeSupported(type)) {
-                return { mimeType: type };
-            }
-        }
-
-        return {}; // Use default
-    }
-
-    blobToBase64(blob) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-    }
+    getSupportedMimeType() { const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/wav']; for (let t of types) { if (MediaRecorder.isTypeSupported(t)) return { mimeType: t }; } return {}; }
 
     updateRecordingUI() {
         if (this.isRecording) {
-            // Recording state
-            this.elements.recordBtn.classList.add('recording');
-            this.elements.recordBtn.innerHTML = '<span class="record-icon">⏹️</span>';
-            this.updateStatus('Recording... Click to stop');
-
-            // Mark section as recording and reveal timer/status
-            if (this.elements.recordingSection) {
-                this.elements.recordingSection.classList.add('recording');
-            }
-            if (this.elements.recordingTimer) {
-                this.elements.recordingTimer.style.display = 'block';
-            }
-            if (this.elements.recordingStatus) {
-                this.elements.recordingStatus.style.display = 'block';
-            }
-            
-            if (this.elements.recordActions) {
-                this.elements.recordActions.style.display = 'flex';
-            }
-            
-            // Allow one-click send during recording
-            if (this.elements.sendBtn) {
-                this.elements.sendBtn.disabled = false;
-            }
+            this.elements.recordBtn.classList.add('recording'); this.elements.recordBtn.innerHTML = '<span class="record-icon">⏹️</span>';
+            this.updateStatus('Recording... Click to stop'); if (this.elements.recordingSection) this.elements.recordingSection.classList.add('recording');
+            if (this.elements.recordingTimer) this.elements.recordingTimer.style.display = 'block'; if (this.elements.recordingStatus) this.elements.recordingStatus.style.display = 'block';
+            if (this.elements.recordActions) this.elements.recordActions.style.display = 'flex'; if (this.elements.sendBtn) this.elements.sendBtn.disabled = false;
         } else {
-            // Stopped state
-            this.elements.recordBtn.classList.remove('recording');
-            this.elements.recordBtn.innerHTML = '<span class="record-icon">🎙️</span>';
-            // Exit recording visual state; keep status visibility controlled by other flows
-            if (this.elements.recordingSection) {
-                this.elements.recordingSection.classList.remove('recording');
-            }
-            if (this.elements.recordingTimer) {
-                this.elements.recordingTimer.style.display = 'none';
-                this.elements.recordingTimer.textContent = '';
-            }
-            
-            // Don't hide record actions immediately - wait for processRecording to complete
-            // The processRecording method will handle showing the send button
+            this.elements.recordBtn.classList.remove('recording'); this.elements.recordBtn.innerHTML = '<span class="record-icon">🎙️</span>';
+            if (this.elements.recordingSection) this.elements.recordingSection.classList.remove('recording');
+            if (this.elements.recordingTimer) { this.elements.recordingTimer.style.display = 'none'; this.elements.recordingTimer.textContent = ''; }
         }
     }
 
     resetRecordingUI() {
-        this.elements.recordBtn.classList.remove('recording');
-        this.elements.recordBtn.innerHTML = '<span class="record-icon">🎙️</span>';
-        // Idle state: no helper text or timer visible
-        this.updateStatus('');
-        this.updateTimer('');
-        if (this.elements.recordingSection) {
-            this.elements.recordingSection.classList.remove('recording');
-        }
-        if (this.elements.recordingStatus) {
-            this.elements.recordingStatus.style.display = 'none';
-        }
-        if (this.elements.recordingTimer) {
-            this.elements.recordingTimer.style.display = 'none';
-        }
-        
-        if (this.elements.recordActions) {
-            this.elements.recordActions.style.display = 'none';
-        }
-        
-        if (this.elements.sendBtn) {
-            this.elements.sendBtn.disabled = true;
-        }
+        this.elements.recordBtn.classList.remove('recording'); this.elements.recordBtn.innerHTML = '<span class="record-icon">🎙️</span>';
+        this.updateStatus(''); this.updateTimer(''); if (this.elements.recordingSection) this.elements.recordingSection.classList.remove('recording');
+        if (this.elements.recordingStatus) this.elements.recordingStatus.style.display = 'none'; if (this.elements.recordingTimer) this.elements.recordingTimer.style.display = 'none';
+        if (this.elements.recordActions) this.elements.recordActions.style.display = 'none'; if (this.elements.sendBtn) this.elements.sendBtn.disabled = true;
     }
 
     startTimer() {
         this.recordingTimer = setInterval(() => {
-            const elapsed = Date.now() - this.recordingStartTime;
-            const minutes = Math.floor(elapsed / 60000);
-            const seconds = Math.floor((elapsed % 60000) / 1000);
-            const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            this.updateTimer(timeString);
-
-            // Auto-stop at 60 minutes as per spec
-            if (minutes >= 60) {
-                this.stopRecording();
-                this.showError('Recording stopped automatically after 60 minutes.');
-            }
+            const elapsed = Date.now() - this.recordingStartTime; const minutes = Math.floor(elapsed / 60000); const seconds = Math.floor((elapsed % 60000) / 1000);
+            const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`; this.updateTimer(timeString);
+            if (minutes >= 60) { this.stopRecording(); this.showError('Recording stopped automatically after 60 minutes.'); }
         }, 1000);
     }
 
-    stopTimer() {
-        if (this.recordingTimer) {
-            clearInterval(this.recordingTimer);
-            this.recordingTimer = null;
-        }
-    }
+    stopTimer() { if (this.recordingTimer) { clearInterval(this.recordingTimer); this.recordingTimer = null; } }
 
-    getRecordingDuration() {
-        if (this.recordingStartTime) {
-            return Math.floor((Date.now() - this.recordingStartTime) / 1000);
-        }
-        return 0;
-    }
+    getRecordingDuration() { return this.recordingStartTime ? Math.floor((Date.now() - this.recordingStartTime) / 1000) : 0; }
 
-    updateStatus(message) {
-        if (this.elements.recordingStatus) {
-            this.elements.recordingStatus.textContent = message || '';
-            // Auto-toggle visibility based on message presence
-            this.elements.recordingStatus.style.display = message ? 'block' : 'none';
-        }
-    }
+    updateStatus(message) { if (this.elements.recordingStatus) { this.elements.recordingStatus.textContent = message || ''; this.elements.recordingStatus.style.display = message ? 'block' : 'none'; } }
 
-    updateTimer(timeString) {
-        if (this.elements.recordingTimer) {
-            this.elements.recordingTimer.textContent = timeString || '';
-            // Only show timer during active recording
-            this.elements.recordingTimer.style.display = this.isRecording ? 'block' : 'none';
-        }
-    }
+    updateTimer(timeString) { if (this.elements.recordingTimer) { this.elements.recordingTimer.textContent = timeString || ''; this.elements.recordingTimer.style.display = this.isRecording ? 'block' : 'none'; } }
 
-    showLoading(message) {
-        const overlay = document.getElementById('loadingOverlay');
-        if (overlay) {
-            const loadingText = overlay.querySelector('.loading-text');
-            if (loadingText) {
-                loadingText.textContent = message;
-            }
-            overlay.classList.add('show');
-        }
-    }
-
-    hideLoading() {
-        const overlay = document.getElementById('loadingOverlay');
-        if (overlay) {
-            overlay.classList.remove('show');
-        }
-    }
-
-    showError(message) {
-        // Simple alert for now - can be enhanced with custom modal
-        alert('Error: ' + message);
-        console.error('Audio Manager Error:', message);
-    }
-
-    showSuccess(message) {
-        // Use in-app toast notification instead of alert
-        if (window.app && typeof window.app.showToast === 'function') {
-            window.app.showToast(message, 'success', 3000);
-        } else {
-            console.log('Success:', message);
-        }
-        console.log('Audio Manager Success:', message);
-    }
-
-    // Cleanup method
-    cleanup() {
-        this.stopRecording();
-        if (this.recordingTimer) {
-            clearInterval(this.recordingTimer);
-        }
-    }
+    showLoading(message) { const overlay = document.getElementById('loadingOverlay'); if (overlay) { const t = overlay.querySelector('.loading-text'); if (t) t.textContent = message; overlay.classList.add('show'); } }
+    hideLoading() { const overlay = document.getElementById('loadingOverlay'); if (overlay) overlay.classList.remove('show'); }
+    showError(message) { alert('Error: ' + message); console.error('[AudioManager] Error:', message); }
+    showSuccess(message) { if (window.app?.showToast) { window.app.showToast(message, 'success', 3000); } else { console.log('[AudioManager] Success:', message); } }
+    cleanup() { this.stopRecording(); if (this.recordingTimer) clearInterval(this.recordingTimer); }
 }
 
-// Export for use in other modules
 window.AudioManager = AudioManager;
