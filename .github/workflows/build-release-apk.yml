@@ -41,6 +41,10 @@ jobs:
       working-directory: ./calorieai-android
       run: npm install
       
+    - name: Add Android platform
+      working-directory: ./calorieai-android
+      run: cordova platform add android@latest
+      
     - name: Copy latest web files to Cordova
       run: |
         rm -rf calorieai-android/www/*
