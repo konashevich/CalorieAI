@@ -7,12 +7,6 @@
     </author>
     <content src="index.html" />
     
-    <!-- Global Preferences -->
-    <preference name="DisallowOverscroll" value="true" />
-    <preference name="BackgroundColor" value="0xffffffff" />
-    <preference name="Orientation" value="portrait" />
-    <preference name="Fullscreen" value="false" />
-    
     <!-- Android-specific Preferences -->
     <platform name="android">
         <preference name="android-minSdkVersion" value="24" />
