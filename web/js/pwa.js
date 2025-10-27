@@ -287,18 +287,72 @@ class PWAManager {
 
     // UI Helper Methods
     showInstallButton() {
-        const installButton = document.getElementById('installBtn');
+        const installBanner = document.getElementById('installBanner');
+        const installBtn = document.getElementById('installBannerBtn');
+        const dismissBtn = document.getElementById('dismissInstallBanner');
+        const installIconBtn = document.getElementById('installIconBtn');
         
-        if (installButton) {
-            installButton.style.display = 'block';
-            installButton.addEventListener('click', () => this.promptInstall(), { once: true });
+        if (installBanner && installBtn) {
+            // Check if user previously dismissed the banner
+            const bannerDismissed = localStorage.getItem('installBannerDismissed');
+            
+            if (!bannerDismissed) {
+                installBanner.classList.add('show');
+                installBtn.addEventListener('click', () => this.promptInstall(), { once: true });
+                dismissBtn.addEventListener('click', () => this.collapseInstallBanner(), { once: true });
+            } else {
+                // Show the collapsed icon instead
+                this.showInstallIcon();
+            }
         }
     }
 
     hideInstallButton() {
-        const installButton = document.getElementById('installBtn');
-        if (installButton) {
-            installButton.style.display = 'none';
+        const installBanner = document.getElementById('installBanner');
+        const installIconBtn = document.getElementById('installIconBtn');
+        
+        if (installBanner) {
+            installBanner.classList.remove('show');
+        }
+        if (installIconBtn) {
+            installIconBtn.style.display = 'none';
+        }
+    }
+
+    collapseInstallBanner() {
+        const installBanner = document.getElementById('installBanner');
+        
+        if (installBanner) {
+            installBanner.classList.remove('show');
+            // Store that user dismissed the banner
+            localStorage.setItem('installBannerDismissed', 'true');
+            // Show the install icon in header
+            this.showInstallIcon();
+        }
+    }
+
+    showInstallIcon() {
+        const installIconBtn = document.getElementById('installIconBtn');
+        
+        if (installIconBtn) {
+            installIconBtn.style.display = 'block';
+            installIconBtn.addEventListener('click', () => this.expandInstallBanner(), { once: true });
+        }
+    }
+
+    expandInstallBanner() {
+        const installBanner = document.getElementById('installBanner');
+        const installBtn = document.getElementById('installBannerBtn');
+        const dismissBtn = document.getElementById('dismissInstallBanner');
+        const installIconBtn = document.getElementById('installIconBtn');
+        
+        if (installBanner) {
+            installBanner.classList.add('show');
+            installIconBtn.style.display = 'none';
+            
+            // Re-attach event listeners
+            installBtn.addEventListener('click', () => this.promptInstall(), { once: true });
+            dismissBtn.addEventListener('click', () => this.collapseInstallBanner(), { once: true });
         }
     }
 

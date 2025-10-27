@@ -35,14 +35,35 @@
         <!-- Header -->
         <header class="app-header">
             <h1 class="app-title">CalorieAI</h1>
-            <button id="installBtn" class="install-btn" style="display: none;">Install App</button>
-            <button id="headerMenuBtn" class="header-menu-btn" aria-label="Open menu">⋮</button>
+            <div class="header-actions">
+                <button id="installIconBtn" class="install-icon-btn" aria-label="Install App">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                </button>
+                <button id="headerMenuBtn" class="header-menu-btn" aria-label="Open menu">⋮</button>
+            </div>
             <div id="headerMenu" class="header-menu" aria-hidden="true">
                 <button id="headerExportBtn" class="header-menu-item">Export Data</button>
                 <button id="headerImportBtn" class="header-menu-item">Import Data</button>
                 <button id="headerSettingsBtn" class="header-menu-item">Settings</button>
             </div>
         </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner">
+            <div class="install-banner-content">
+                <div class="install-banner-icon">📱</div>
+                <div class="install-banner-text">
+                    <strong>Get CalorieAI App</strong>
+                    <span>Install for offline access and better experience</span>
+                </div>
+                <div class="install-banner-actions">
+                    <button id="installBannerBtn" class="install-banner-btn">Install</button>
+                    <button id="dismissInstallBanner" class="install-banner-dismiss">×</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Main Content -->
         <main class="main-content">
