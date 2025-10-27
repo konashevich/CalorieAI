@@ -1,8 +1,10 @@
 # 🚀 Quick Start - GitHub Actions APK Build
 
-## ✅ Setup Complete!
+Last updated: 2025-10-27
 
-Your CalorieAI project now builds APK automatically via GitHub Actions!
+## ✅ Setup Complete
+
+Your CalorieAI project now builds APK automatically via GitHub Actions.
 
 ---
 
@@ -24,11 +26,11 @@ git commit -m "Add GitHub Actions for automated APK build"
 git push origin main
 ```
 
-### **Step 2: Watch the Build**
+### Step 2: Watch the build
 
-1. Go to your GitHub repository: https://github.com/konashevich/CalorieAI
+1. Go to your GitHub repository: [konashevich/CalorieAI](https://github.com/konashevich/CalorieAI)
 2. Click the **Actions** tab
-3. You'll see "Build Android APK" workflow running
+3. You'll see the "Build Android APK" workflow running
 4. Click on it to watch the build progress (takes ~5-10 minutes)
 
 ### **Step 3: Download Your APK**
@@ -43,42 +45,45 @@ Once the build completes (green checkmark):
 
 ---
 
-## 🎯 How It Works
+## 🎯 How it works
 
 **Every time you push code to GitHub:**
+
 1. ✅ GitHub Actions automatically starts
 2. ✅ Sets up Android build environment (Node.js, JDK, Android SDK)
 3. ✅ Copies your latest `web/` files to `calorieai-android/www/`
 4. ✅ Builds the APK
 5. ✅ Uploads APK to artifacts (available for 30 days)
 
-**No Android Studio needed!** Everything builds in the cloud.
+**No Android Studio needed.** Everything builds in the cloud.
 
 ---
 
-## 📱 Installing APK on Your Device
+## 📱 Installing APK on your device
 
-### **Method 1: Via USB**
+### Method 1: Via USB
+
 1. Download APK from GitHub artifacts
 2. Connect Android device to PC
 3. Copy APK to device
 4. Open file manager on device
 5. Tap APK file
 6. Allow "Install from Unknown Sources" if prompted
-7. Install!
+7. Install
 
-### **Method 2: Direct Download**
+### Method 2: Direct download
+
 1. Download APK from GitHub on your phone's browser
 2. Open Downloads folder
 3. Tap APK file
 4. Allow "Install from Unknown Sources" if prompted
-5. Install!
+5. Install
 
 ---
 
 ## 🔄 Workflow Triggers
 
-### **Automatic Builds (Debug APK)**
+### Automatic builds (debug APK)
 
 These actions will trigger an APK build:
 
@@ -90,7 +95,7 @@ git push origin develop
 # Any change in web/ or calorieai-android/ folders
 ```
 
-### **Release Builds (Signed APK)**
+### Release builds (signed APK)
 
 Create a version tag:
 
@@ -99,14 +104,14 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-This creates a GitHub Release with the APK attached!
+This creates a GitHub Release with the APK attached.
 
-### **Manual Build**
+### Manual build
 
 Don't want to push code? Build manually:
 
 1. Go to GitHub → Actions tab
-2. Click "Build Android APK" workflow
+2. Click the "Build Android APK" workflow
 3. Click "Run workflow" button
 4. Select branch
 5. Click "Run workflow"
@@ -115,10 +120,9 @@ Don't want to push code? Build manually:
 
 ## 📊 Build Status
 
-Check build status at:
-https://github.com/konashevich/CalorieAI/actions
+Check build status at: [Actions for konashevich/CalorieAI](https://github.com/konashevich/CalorieAI/actions)
 
-- ✅ Green checkmark = Build succeeded, APK ready!
+- ✅ Green checkmark = Build succeeded, APK ready
 - 🟡 Yellow circle = Build in progress
 - ❌ Red X = Build failed, check logs
 
@@ -126,7 +130,7 @@ https://github.com/konashevich/CalorieAI/actions
 
 ## 🎨 Typical Workflow
 
-### **Development Cycle:**
+### Development cycle
 
 ```bash
 # 1. Make changes to web app
@@ -147,7 +151,7 @@ git push
 # 7. Repeat!
 ```
 
-### **Creating a Release:**
+### Creating a release
 
 ```bash
 # 1. Update version in config.xml
@@ -169,7 +173,7 @@ git push origin v1.0.0
 
 ## 🔧 Customization
 
-### **Change Which Branches Trigger Builds**
+### Change which branches trigger builds
 
 Edit `.github/workflows/build-android-apk.yml`:
 
@@ -186,7 +190,7 @@ with:
   retention-days: 60  # Change from 30 to 60 days
 ```
 
-### **Add Email Notifications**
+### Add email notifications
 
 Add this step to the workflow:
 
@@ -199,7 +203,7 @@ Add this step to the workflow:
     server_port: 465
     username: ${{ secrets.EMAIL_USERNAME }}
     password: ${{ secrets.EMAIL_PASSWORD }}
-    subject: "✅ APK Build Successful!"
+    subject: "APK Build Successful"
     to: your-email@example.com
     from: GitHub Actions
     body: "Your CalorieAI APK is ready to download!"
@@ -209,15 +213,17 @@ Add this step to the workflow:
 
 ## 🐛 Troubleshooting
 
-### **Build Failed**
+### Build failed
 
 Check the logs:
+
 1. Go to Actions tab
-2. Click failed workflow
-3. Click "Build Android APK" job
+2. Click the failed workflow
+3. Click the "Build Android APK" job
 4. Read the red error messages
 
 Common fixes:
+
 - **Gradle error**: Usually fixes itself on retry
 - **Out of space**: Retry the workflow
 - **Syntax error in config.xml**: Fix and push again
@@ -225,6 +231,7 @@ Common fixes:
 ### **Can't Find APK**
 
 Make sure:
+
 1. Build succeeded (green checkmark)
 2. Scroll all the way down to "Artifacts"
 3. Click the artifact name to download
@@ -277,6 +284,7 @@ git tag v1.0.0 && git push origin v1.0.0
 ## 🎯 What You Get
 
 After each push:
+
 - ✅ Debug APK (unsigned, for testing)
 - ✅ Available in Actions artifacts
 - ✅ Retained for 30 days
@@ -284,6 +292,7 @@ After each push:
 - ✅ Installable on any Android 7.0+ device
 
 After each release tag:
+
 - ✅ Release APK (can be signed)
 - ✅ Attached to GitHub Release
 - ✅ Retained for 90 days
@@ -292,9 +301,9 @@ After each release tag:
 
 ---
 
-## ✅ You're All Set!
+## ✅ You're all set
 
-**Next action**: Push your code to GitHub and watch the magic happen!
+**Next action**: Push your code to GitHub and watch the build run.
 
 ```bash
 git add .
@@ -302,6 +311,6 @@ git commit -m "🚀 Setup GitHub Actions for APK build"
 git push origin main
 ```
 
-Then go to: https://github.com/konashevich/CalorieAI/actions
+Then go to: [Actions for konashevich/CalorieAI](https://github.com/konashevich/CalorieAI/actions)
 
-Your APK will be ready in ~5-10 minutes! 🎉
+Your APK will be ready in ~5-10 minutes.

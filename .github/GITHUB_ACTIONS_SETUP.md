@@ -1,20 +1,24 @@
 # GitHub Actions - Automated APK Build Setup
 
+Last updated: 2025-10-27
+
 ## 🎯 Overview
 
-Your CalorieAI project now has **automated APK building** via GitHub Actions! Every time you push code to GitHub, the APK will be built automatically in the cloud.
+Your CalorieAI project now has **automated APK building** via GitHub Actions. Every time you push code to GitHub, the APK will be built automatically in the cloud.
 
 ---
 
 ## ✅ What's Been Set Up
 
-### 1. **Debug APK Workflow** (`.github/workflows/build-android-apk.yml`)
+-### 1. **Debug APK Workflow** (`.github/workflows/build-android-apk.yml`)
+
 - **Triggers on**: Push to `main` or `develop` branches
 - **Builds**: Unsigned debug APK for testing
 - **Duration**: ~5-10 minutes per build
 - **Output**: Debug APK available in Actions artifacts
 
-### 2. **Release APK Workflow** (`.github/workflows/build-release-apk.yml`)
+-### 2. **Release APK Workflow** (`.github/workflows/build-release-apk.yml`)
+
 - **Triggers on**: Git tags (e.g., `v1.0.0`)
 - **Builds**: Signed release APK (if keystore configured)
 - **Duration**: ~5-10 minutes per build
@@ -35,6 +39,7 @@ git push origin main
 ```
 
 **That's it!** GitHub Actions will automatically:
+
 1. Set up Android build environment
 2. Install Node.js, JDK, and Android SDK
 3. Copy latest web files to Cordova
@@ -76,6 +81,7 @@ keytool -genkey -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity
 ```
 
 Answer the prompts:
+
 - **Keystore password**: Choose a strong password (save it!)
 - **Key password**: Can be same as keystore password
 - **Name, Organization, etc.**: Fill in your details
@@ -115,6 +121,7 @@ git push origin v1.0.0
 ```
 
 GitHub Actions will:
+
 1. Build the APK
 2. Sign it with your keystore
 3. Create a GitHub Release
@@ -136,6 +143,7 @@ You can also trigger builds manually without pushing code:
 ## 📊 Workflow Features
 
 ### **Debug APK Workflow**
+
 ✅ Automatic build on code push  
 ✅ Copies latest web files automatically  
 ✅ Builds debug APK (no signing needed)  
@@ -144,6 +152,7 @@ You can also trigger builds manually without pushing code:
 ✅ Comments on Pull Requests with build info  
 
 ### **Release APK Workflow**
+
 ✅ Triggered by version tags  
 ✅ Optional automatic signing  
 ✅ Creates GitHub Release  
@@ -158,6 +167,7 @@ You can also trigger builds manually without pushing code:
 ### **Triggers**
 
 **Debug APK builds on**:
+
 - Push to `main` branch
 - Push to `develop` branch
 - Changes in `calorieai-android/` folder
@@ -165,6 +175,7 @@ You can also trigger builds manually without pushing code:
 - Manual trigger
 
 **Release APK builds on**:
+
 - Git tags matching `v*.*.*` pattern
 - Manual trigger
 
@@ -222,11 +233,13 @@ You can add Slack, Discord, or email notifications by adding steps to the workfl
 
 ### **Common Issues**
 
-**Build fails with "No space left on device"**
+#### Build fails with "No space left on device"
+
 - GitHub runners have limited space
 - Usually resolves on retry
 
-**Build fails with Gradle errors**
+#### Build fails with Gradle errors
+
 - Check the logs for specific error
 - Often related to dependency issues
 - Retry usually works
@@ -253,12 +266,14 @@ You can add Slack, Discord, or email notifications by adding steps to the workfl
 ## 🔒 Security Notes
 
 ### **Secrets Safety**
+
 - ✅ GitHub Secrets are encrypted
 - ✅ Never exposed in logs
 - ✅ Only accessible to workflows
 - ✅ Can't be read after creation
 
 ### **Keystore Safety**
+
 - ⚠️ Keep `release-key.jks` file secure
 - ⚠️ Backup keystore safely
 - ⚠️ Never commit keystore to repository
@@ -280,11 +295,13 @@ release-key.*
 ## 📊 Build Statistics
 
 ### **Typical Build Times**
+
 - Debug APK: 5-7 minutes
 - Release APK: 6-8 minutes
 - First build: 8-10 minutes (downloads dependencies)
 
 ### **APK Sizes**
+
 - Debug APK: ~15-20 MB
 - Release APK (unsigned): ~10-15 MB
 - Release APK (signed): ~10-15 MB
@@ -294,6 +311,7 @@ release-key.*
 ## 🎯 Quick Reference
 
 ### **Push Code → Get Debug APK**
+
 ```bash
 git add .
 git commit -m "Your message"
@@ -303,6 +321,7 @@ git push
 ```
 
 ### **Create Release → Get Signed APK**
+
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
@@ -311,6 +330,7 @@ git push origin v1.0.0
 ```
 
 ### **Manual Build**
+
 1. Go to Actions tab
 2. Click "Run workflow"
 3. Wait 5-10 minutes
@@ -347,20 +367,24 @@ Every time you push code:
 ## 📞 Troubleshooting
 
 ### **Build Failed**
+
 1. Check the Actions logs
 2. Look for red error messages
 3. Common issues:
-   - Gradle dependency errors (retry)
-   - Out of space (retry)
-   - Configuration errors (fix and push)
+
+- Gradle dependency errors (retry)
+- Out of space (retry)
+- Configuration errors (fix and push)
 
 ### **Can't Download APK**
+
 1. Make sure build succeeded (green checkmark)
 2. Scroll to artifacts section
 3. Click to download ZIP file
 4. Extract APK from ZIP
 
 ### **APK Won't Install**
+
 1. Enable "Install from Unknown Sources"
 2. Check Android version (need 7.0+)
 3. Try debug APK first (easier to install)
@@ -384,17 +408,18 @@ So just update files in the `web/` folder and push!
 
 ## 📚 Additional Resources
 
-- **GitHub Actions Docs**: https://docs.github.com/en/actions
-- **Cordova Build Docs**: https://cordova.apache.org/docs/en/latest/guide/cli/
-- **Android Signing Docs**: https://developer.android.com/studio/publish/app-signing
+- **GitHub Actions Docs**: [GitHub Actions docs](https://docs.github.com/en/actions)
+- **Cordova Build Docs**: [Cordova CLI guide](https://cordova.apache.org/docs/en/latest/guide/cli/)
+- **Android Signing Docs**: [Android app signing](https://developer.android.com/studio/publish/app-signing)
 
 ---
 
-**Setup Complete!** 🎉
+**Setup complete** 🎉
 
-Your CalorieAI app will now build automatically on every push to GitHub. No local Android Studio required!
+Your CalorieAI app will now build automatically on every push to GitHub. No local Android Studio required.
 
 **Next Steps**:
+
 1. Push your code to GitHub
 2. Watch the Actions tab for build progress
 3. Download APK from artifacts
