@@ -1,4 +1,4 @@
-# Audio Recording Permission Fix 2
+# Audio Recording Permission Fix 3
 
 ## Issue
 Audio recording was failing in the Android APK with error: "Failed to start recording. Please check your microphone."
