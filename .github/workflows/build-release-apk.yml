@@ -1,0 +1,118 @@
+name: Build Release APK
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual trigger
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build-release:
+    name: Build Signed Release APK
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: calorieai-android/package-lock.json
+        
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Install Cordova
+      run: npm install -g cordova@latest
+      
+    - name: Install dependencies
+      working-directory: ./calorieai-android
+      run: npm install
+      
+    - name: Copy latest web files to Cordova
+      run: |
+        rm -rf calorieai-android/www/*
+        cp -r web/* calorieai-android/www/
+        
+    - name: Create build.json for signing
+      working-directory: ./calorieai-android
+      run: |
+        cat > build.json << EOF
+        {
+          "android": {
+            "release": {
+              "keystore": "release-key.jks",
+              "storePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+              "alias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+              "password": "${{ secrets.ANDROID_KEY_PASSWORD }}",
+              "keystoreType": "jks"
+            }
+          }
+        }
+        EOF
+        
+    - name: Decode keystore
+      if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      working-directory: ./calorieai-android
+      run: |
+        echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release-key.jks
+        
+    - name: Build Release APK (Unsigned if no keystore)
+      working-directory: ./calorieai-android
+      run: |
+        if [ -f "release-key.jks" ]; then
+          echo "Building signed release APK..."
+          cordova build android --release --verbose
+        else
+          echo "No keystore found. Building unsigned release APK..."
+          cordova build android --release --verbose
+          echo "⚠️ APK is unsigned. You'll need to sign it manually."
+        fi
+        
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: CalorieAI-release-${{ github.ref_name || inputs.version }}
+        path: |
+          calorieai-android/platforms/android/app/build/outputs/apk/release/*.apk
+        retention-days: 90
+        
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          calorieai-android/platforms/android/app/build/outputs/apk/release/*.apk
+        body: |
+          ## 📱 CalorieAI Android Release
+          
+          ### What's New
+          - See CHANGELOG.md for details
+          
+          ### Installation
+          1. Download the APK file
+          2. Enable "Install from Unknown Sources" on your Android device
+          3. Install the APK
+          
+          ### Requirements
+          - Android 7.0 (API 24) or higher
+          
+          **Note:** This is a ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'signed' || 'unsigned' }} release build.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

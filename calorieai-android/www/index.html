@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2196F3">
+    <title>CalorieAI - AI-Powered Calorie Tracking</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    
+    <!-- Theme detection -->
+    <script>
+        // Detect OS theme preference
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+        }
+        
+        // Listen for theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+        });
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <h1 class="app-title">CalorieAI</h1>
+            <div class="header-actions">
+                <button id="installIconBtn" class="install-icon-btn" aria-label="Install App">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                </button>
+                <button id="headerMenuBtn" class="header-menu-btn" aria-label="Open menu">⋮</button>
+            </div>
+            <div id="headerMenu" class="header-menu" aria-hidden="true">
+                <button id="headerExportBtn" class="header-menu-item">Export Data</button>
+                <button id="headerImportBtn" class="header-menu-item">Import Data</button>
+                <button id="headerSettingsBtn" class="header-menu-item">Settings</button>
+            </div>
+        </header>
+
+        <!-- Install Banner -->
+        <div id="installBanner" class="install-banner">
+            <div class="install-banner-content">
+                <div class="install-banner-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                    </svg>
+                </div>
+                <div class="install-banner-text">
+                    <strong>Get CalorieAI App</strong>
+                    <span>Install for offline access and better experience</span>
+                </div>
+                <div class="install-banner-actions">
+                    <button id="installBannerBtn" class="install-banner-btn">Install</button>
+                    <button id="dismissInstallBanner" class="install-banner-dismiss" aria-label="Dismiss">×</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Record Page -->
+            <section id="record-page" class="page active">
+                <div class="page-header">
+                </div>
+                
+                <!-- Recording Section -->
+                <div class="recording-section">
+                    <div class="record-controls">
+                        <button id="recordBtn" class="record-btn" aria-label="Start Recording">
+                            <span class="record-icon">🎙️</span>
+                        </button>
+                        <div class="recording-status" id="recordingStatus" aria-live="polite"></div>
+                        <div class="recording-timer" id="recordingTimer" aria-hidden="true"></div>
+                    </div>
+                    
+                    <div class="record-actions" id="recordActions" style="display: none;">
+                        <button id="stopBtn" class="action-btn stop">Stop</button>
+                        <button id="sendBtn" class="action-btn send">Send to AI</button>
+                    </div>
+                </div>
+
+                <!-- Demo Data Button removed -->
+
+                <!-- Records List -->
+                <div class="records-section">
+                    <div class="tip-section">
+                        <p>Tip: Tap Mic to tell to the AI what you ate or cooked and how much, e.g. "I ate a carrot, 50 grams", or "I cooked a miso soup with 1 tablespoon of miso paste and 100 grams of tofu, and teaspoon of dry dill"</p>
+                    </div>
+                    <div class="records-list" id="recordsList">
+                        <!-- Records will be populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Record Details Modal -->
+            <div class="modal" id="recordDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Recording Details</h3>
+                        <button class="modal-close" id="closeRecordModal">&times;</button>
+                    </div>
+                    <div class="modal-body" id="recordDetailsBody">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            </section>
+
+            <!-- Processed Page -->
+            <section id="processed-page" class="page">
+                <div class="page-header">
+                    <div class="page-header-content">
+                        <h2>Processed Foods</h2>
+                    </div>
+                    <div class="page-header-actions">
+                        <button id="addProcessedManualBtn" class="btn-icon" title="Add manually" aria-label="Add processed food manually">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                            </svg>
+                        </button>
+                        <button id="captureFoodBtn" class="btn-camera" title="Scan food label" aria-label="Scan food label">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                                <path d="M12 15.2c-2.07 0-3.75-1.68-3.75-3.75S9.93 7.7 12 7.7s3.75 1.68 3.75 3.75S14.07 15.2 12 15.2zm0-6c-1.24 0-2.25 1.01-2.25 2.25S10.76 13.7 12 13.7s2.25-1.01 2.25-2.25S13.24 9.2 12 9.2z"/>
+                                <path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h4.05l1.83-2h4.24l1.83 2H20v12z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Processed Foods List -->
+                <div class="processed-section">
+                    <div class="processed-list" id="processedList">
+                        <div class="empty-state">
+                            <p>No processed foods yet. Scan a food label or add manually!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden camera input -->
+                <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden-input">
+            </section>
+
+            <!-- Processed Food Details Modal -->
+            <div class="modal" id="processedDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="processedDetailsTitle">Add Processed Food</h3>
+                        <div class="modal-actions">
+                            <button class="btn-icon" id="deleteProcessedBtn" title="Delete" aria-label="Delete" style="display: none;">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                </svg>
+                            </button>
+                            <button class="modal-close" id="closeProcessedModal">&times;</button>
+                        </div>
+                    </div>
+                    <div class="modal-body">
+                        <form id="processedDetailsForm">
+                            <div class="form-group">
+                                <label for="processedName">Food Name</label>
+                                <input type="text" id="processedName" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="processedBrand">Brand (optional)</label>
+                                <input type="text" id="processedBrand" class="form-input">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="processedCalsPer100g">Calories per 100g</label>
+                                    <input type="number" id="processedCalsPer100g" class="form-input" min="0" step="1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="processedServingSize">Serving Size (g)</label>
+                                    <input type="number" id="processedServingSize" class="form-input" min="0" step="1">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="processedServingCals">Calories per Serving</label>
+                                <input type="number" id="processedServingCals" class="form-input" min="0" step="1">
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="action-btn secondary" id="cancelProcessedEdit">Cancel</button>
+                                <button type="submit" class="action-btn primary">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add to Eat from Processed Modal -->
+            <div class="modal" id="addProcessedToEatModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="addToEatTitle">Add to Eaten</h3>
+                        <button class="modal-close" id="closeAddToEatModal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="addToEatForm">
+                            <div class="form-group">
+                                <label>Food: <strong id="addToEatFoodName"></strong></label>
+                            </div>
+                            <div class="form-group">
+                                <label for="addToEatAmount">Amount</label>
+                                <div class="form-row">
+                                    <input type="number" id="addToEatAmount" class="form-input" min="1" required>
+                                    <select id="addToEatUnit" class="form-input">
+                                        <option value="grams">grams</option>
+                                        <option value="serving">serving(s)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Calculated Calories: <strong id="calculatedCalories">0</strong> cal</label>
+                            </div>
+                            <div class="form-group">
+                                <label for="addToEatDate">Date</label>
+                                <select id="addToEatDate" class="form-input">
+                                    <option value="today">Today</option>
+                                    <option value="yesterday">Yesterday</option>
+                                    <option value="custom">Custom Date...</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="customDateGroup" style="display: none;">
+                                <label for="addToEatCustomDate">Custom Date</label>
+                                <input type="date" id="addToEatCustomDate" class="form-input">
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="action-btn secondary" id="cancelAddToEat">Cancel</button>
+                                <button type="submit" class="action-btn primary">Add to Eaten</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cook Page -->
+            <section id="cook-page" class="page">
+                <div class="page-header">
+                    <h2>Cooked Meals</h2>
+                    <div class="page-filters">
+                        <select id="mealDateFilter" class="date-filter" title="Filter meals by date">
+                            <option value="all">All Days</option>
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="week">This Week</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Meals List -->
+                <div class="meals-section">
+                    <div class="section-header">
+                        <h3>Meals</h3>
+                        <button id="addMealBtn" class="btn-icon" title="Add cooked meal" aria-label="Add cooked meal">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="meals-list" id="mealsList">
+                        <!-- Meals will be populated by JavaScript -->
+                        <div class="empty-state">
+                            <p>No cooked meals yet. Record cooking activities to get started!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Floating Add Button (visible on Cook page) -->
+                <button id="fabAddMeal" class="fab-add" title="Add cooked meal" aria-label="Add cooked meal">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                    </svg>
+                </button>
+            </section>
+
+            <!-- Meal Details Modal -->
+            <div class="modal" id="mealDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="mealDetailsTitle">Meal Details</h3>
+                        <div class="modal-actions">
+                            <button class="btn-icon" id="editMealBtn" title="Edit meal" aria-label="Edit meal">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l9.06-9.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+                                </svg>
+                            </button>
+                            <button class="btn-icon" id="deleteMealBtn" title="Delete meal" aria-label="Delete meal">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                </svg>
+                            </button>
+                            <button class="modal-close" id="closeMealModal">&times;</button>
+                        </div>
+                    </div>
+                    <div class="modal-body" id="mealDetailsBody">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Cooked Meal Modal -->
+            <div class="modal" id="mealCreateModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="mealCreateTitle">Add Cooked Meal</h3>
+                        <button class="modal-close" id="closeMealCreate">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="mealCreateForm">
+                            <div class="form-group">
+                                <label for="mealName">Meal Name</label>
+                                <input type="text" id="mealName" class="form-input" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="mealTotalWeight">Total Weight (g)</label>
+                                    <input type="number" id="mealTotalWeight" class="form-input" min="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mealTotalCalories">Total Calories</label>
+                                    <input type="number" id="mealTotalCalories" class="form-input" min="0" step="1">
+                                </div>
+                            </div>
+                            <!-- Ingredients Editor -->
+                            <div class="form-group">
+                                <label>Ingredients</label>
+                                <div id="ingredientsEditor">
+                                    <div class="ingredient-inputs form-row" style="margin-bottom: 0.75rem;">
+                                        <input type="text" id="ingName" class="form-input" placeholder="Name">
+                                        <input type="number" id="ingWeight" class="form-input" placeholder="Weight (g)" min="0">
+                                        <input type="number" id="ingCals100" class="form-input" placeholder="Cal/100g" min="0">
+                                        <button type="button" id="addIngredientBtn" class="action-btn primary" title="Add ingredient">Add</button>
+                                    </div>
+                                    <div id="ingredientsList" class="ingredients-list" aria-live="polite"></div>
+                                    <div id="ingredientsTotals" class="form-help" style="margin-top: 8px;">Totals: 0 g, 0 cal</div>
+                                </div>
+                                <div class="form-help">When ingredients are present, total weight and calories will be recalculated automatically on Save.</div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="mealDate">Cooked Date</label>
+                                    <input type="date" id="mealDate" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mealTime">Cooked Time</label>
+                                    <div class="time-24-wrapper">
+                                        <select id="mealTimeHour" class="form-input" aria-label="Hour"></select>
+                                        <span>:</span>
+                                        <select id="mealTimeMinute" class="form-input" aria-label="Minute"></select>
+                                        <input type="hidden" id="mealTime">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="action-btn secondary" id="cancelMealCreate">Cancel</button>
+                                <button type="submit" class="action-btn primary">Save Meal</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Eat Page -->
+            <section id="eat-page" class="page">
+                <div class="page-header">
+                    <h2>Daily Calories</h2>
+                    <div class="date-navigation">
+                        <button id="prevDay" class="date-nav-btn">‹</button>
+                        <div class="selected-date" id="selectedDate"></div>
+                        <button id="nextDay" class="date-nav-btn">›</button>
+                    </div>
+                </div>
+                
+                <!-- Daily Summary -->
+                <div class="daily-summary">
+                    <div class="calorie-counter">
+                        <span class="calorie-amount" id="dailyCalories">0</span>
+                        <span class="calorie-unit">cal</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="calorieProgress"></div>
+                    </div>
+                </div>
+
+                <!-- Food Items List -->
+                <div class="food-section">
+                    <div class="section-header">
+                        <h3>Food Items</h3>
+                        <button id="addFoodBtn" class="btn-icon" title="Add food manually" aria-label="Add food manually">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="food-list" id="foodList">
+                        <!-- Food items will be populated by JavaScript -->
+                        <div class="empty-state">
+                            <p>No food logged for this day. Start recording or add from cooked meals!</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Floating Add Button (visible on Eat page) -->
+                <button id="fabAddFood" class="fab-add" title="Add food" aria-label="Add food">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                    </svg>
+                </button>
+            </section>
+
+            <!-- Food Item Details Modal -->
+            <div class="modal" id="foodDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Food Item Details</h3>
+                        <button class="modal-close" id="closeFoodModal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="foodDetailsForm">
+                            <div class="form-group">
+                                <label for="foodName">Food Name</label>
+                                <input type="text" id="foodName" class="form-input" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="foodWeight">Weight</label>
+                                    <input type="number" id="foodWeight" class="form-input" min="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="foodUnit">Unit</label>
+                                    <select id="foodUnit" class="form-input" title="Weight unit">
+                                        <option value="grams">grams</option>
+                                        <option value="kg">kg</option>
+                                        <option value="oz">oz</option>
+                                        <option value="lbs">lbs</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="foodCalories">Calories</label>
+                                <input type="number" id="foodCalories" class="form-input" min="0" required>
+                                <div class="calories-per-gram-display">
+                                    <span id="calories-per-gram">-- cal/g</span>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="foodDate">Date</label>
+                                    <input type="date" id="foodDate" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="foodTimeHour">Time</label>
+                                    <div class="time-24-wrapper">
+                                        <select id="foodTimeHour" class="form-input" title="Hour (00-23)"></select>
+                                        <span>:</span>
+                                        <select id="foodTimeMinute" class="form-input" title="Minute (00-59)"></select>
+                                    </div>
+                                    <!-- Hidden combined value persisted as HH:MM -->
+                                    <input type="hidden" id="foodTime" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="foodSource">Source</label>
+                                <select id="foodSource" class="form-input" title="Data source" disabled>
+                                    <option value="audio">Voice Recording</option>
+                                    <option value="cooking">Cooked Meal</option>
+                                    <option value="manual">Manual Entry</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="action-btn secondary" id="cancelFoodEdit">Cancel</button>
+                                <button type="submit" class="action-btn primary">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clarification Modal -->
+            <div class="modal" id="clarificationModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Additional Information Needed</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p id="clarificationMessage">We need more information to process your recording.</p>
+                        <div id="clarificationForm">
+                            <!-- Dynamic form fields will be added here -->
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="action-btn secondary" id="skipClarification">Skip</button>
+                            <button type="button" class="action-btn primary" id="submitClarification">Submit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings Modal -->
+        <div class="modal" id="settingsModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <span class="modal-close" id="closeSettingsModal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <form id="settingsForm">
+                        <div class="form-group">
+                            <label for="geminiApiKey">Gemini API Key</label>
+                            <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key">
+                            <small class="form-help">
+                                Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>
+                            </small>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="action-btn secondary" id="clearApiKey">Clear Key</button>
+                            <button type="submit" class="action-btn primary">Save Settings</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-page="record" aria-label="Recorded">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                        <!-- Microphone: rounded head, handle and base -->
+                        <path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                        <path d="M19 11v1a7 7 0 0 1-14 0v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none" />
+                        <path d="M12 17v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none" />
+                    </svg>
+                </span>
+                <span class="nav-label">Recorded</span>
+                <span class="accent-dot" aria-hidden="true"></span>
+            </button>
+            <button class="nav-btn" data-page="processed" aria-label="Processed">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                        <!-- Camera outline -->
+                        <path d="M4 7h3l2-2h6l2 2h3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" fill="none" />
+                        <!-- Lens -->
+                        <circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="1.6" fill="none" />
+                    </svg>
+                </span>
+                <span class="nav-label">Processed</span>
+                <span class="accent-dot" aria-hidden="true"></span>
+            </button>
+            <button class="nav-btn" data-page="cook" aria-label="Cooked">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                        <!-- Pot / stewpot outline -->
+                        <rect x="5" y="8" width="14" height="8" rx="2" stroke="currentColor" stroke-width="1.4" fill="none" />
+                        <!-- Handles -->
+                        <path d="M3.5 10.5c0 .8.6 1.5 1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none" />
+                        <path d="M20.5 10.5c0 .8-.6 1.5-1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none" />
+                        <!-- Lid -->
+                        <path d="M6 7c1-1 3-1.5 6-1.5s5 .5 6 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none" />
+                        <line x1="9" y1="6" x2="15" y2="6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                    </svg>
+                </span>
+                <span class="nav-label">Cooked</span>
+                <span class="accent-dot" aria-hidden="true"></span>
+            </button>
+            <button class="nav-btn" data-page="eat" aria-label="Eaten">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                        <!-- Flame / fire icon -->
+                        <path d="M12 2s-3 3.6-3.5 6.2C7.9 11 9 13 12 15c3-2 4.1-4 3.5-6.8C15 5.6 12 2 12 2z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                        <path d="M12 9s-1 1.2-1 2.2C11 13 12 14 12 14s1-1 1-2c0-1-.9-3-1-3z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                    </svg>
+                </span>
+                <span class="nav-label">Eaten</span>
+                <span class="accent-dot" aria-hidden="true"></span>
+            </button>
+            <!-- Settings moved to header menu -->
+        </nav>
+    </div>
+
+    <!-- Protocol Warning -->
+    <div class="protocol-warning hidden" id="protocolWarning">
+        <div class="warning-content">
+            <h3>⚠️ Limited Functionality</h3>
+            <p>For full features including voice recording and PWA capabilities, please run:</p>
+            <code>python -m http.server 8000</code>
+            <p>Then visit: <a href="http://localhost:8000">http://localhost:8000</a></p>
+            <button onclick="document.getElementById('protocolWarning').classList.add('hidden')">Continue Anyway</button>
+        </div>
+    </div>
+
+    <!-- Toasts -->
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing with AI...</div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="js/indexeddb.js"></script>
+    <script src="js/pwa.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/gemini-ai.js"></script>
+    <!-- Cordova JavaScript (loaded first) -->
+    <script src="cordova.js"></script>
+    
+    <!-- App JavaScript -->
+    <script src="js/cordova-integration.js"></script>
+    <script src="js/processed.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="js/app.js"></script>
+    
+    <script>
+        // Check protocol and show warning if needed
+        if (window.location.protocol === 'file:') {
+            document.getElementById('protocolWarning').classList.remove('hidden');
+        }
+
+        function generateDemo() {
+            if (confirm('This will replace all existing data with demo data. Continue?')) {
+                if (window.app && window.app.storage) {
+                    window.app.storage.generateSampleData();
+                    window.app.refreshAllPages();
+                    alert('Demo data loaded! Check all three pages to see the features.');
+                } else {
+                    alert('App not ready yet. Please try again in a moment.');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

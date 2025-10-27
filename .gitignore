@@ -1,1 +1,30 @@
 /old
+
+# Android keystores and signing files
+*.jks
+*.keystore
+release-key.*
+build.json
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Build outputs
+calorieai-android/platforms/
+calorieai-android/plugins/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
