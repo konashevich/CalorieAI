@@ -4,34 +4,44 @@
 Audio recording was failing in the Android APK with error: "Failed to start recording. Please check your microphone."
 
 ## Root Causes
+
 1. Missing `cordova-plugin-media` plugin (was listed in config.xml but not installed)
 2. Missing `cordova-plugin-android-permissions` plugin for runtime permission handling
-3. No Android manifest permissions for RECORD_AUDIO
-4. No runtime permission request before attempting to record
+3. No runtime permission request before attempting to record
 
 ## Changes Made
 
-### 1. Updated `config.xml`
-- Added Android manifest permissions:
-  - `RECORD_AUDIO` - Required for microphone access
-  - `MODIFY_AUDIO_SETTINGS` - Required for audio configuration
-  - `WRITE_EXTERNAL_STORAGE` and `READ_EXTERNAL_STORAGE` - For storing recordings
-  - `CAMERA` - For image capture feature
-  - `INTERNET` and `ACCESS_NETWORK_STATE` - For AI processing
+### 1. Installed Missing Plugins
 
-### 2. Installed Missing Plugins
-- ✅ `cordova-plugin-media@^7.0.0` - For audio recording on Android
+- ✅ `cordova-plugin-media@^7.0.0` - For audio recording on Android (adds RECORD_AUDIO permission)
 - ✅ `cordova-plugin-android-permissions@^1.1.5` - For runtime permission handling
 
-### 3. Updated `cordova-integration.js`
+**Note**: The plugins automatically add the necessary Android manifest permissions. No manual config.xml changes needed.
+
+### 2. Updated `cordova-integration.js`
+
 - Added runtime permission request on app start
 - Properly requests RECORD_AUDIO, CAMERA, and storage permissions
 - Handles permission denial gracefully
 
-### 4. Updated `audio.js`
+### 3. Updated `audio.js`
+
 - Added permission check before starting Cordova recording
 - Requests RECORD_AUDIO permission if not already granted
 - Shows user-friendly error if permission is denied
+
+## Build Error Fix
+
+**IMPORTANT**: If you get this build error:
+```
+ParseError at [row,col]:[42,75]
+Message: http://www.w3.org/TR/1999/REC-xml-names-19990114#AttributePrefixUnbound
+```
+
+This means `config.xml` has incorrect permission syntax. The fix:
+- ✅ Remove manual `<uses-permission>` tags from config.xml
+- ✅ Let the Cordova plugins add permissions automatically
+- ✅ The plugins (`cordova-plugin-media`, `cordova-plugin-camera`) handle manifest permissions
 
 ## How to Rebuild the APK
 
