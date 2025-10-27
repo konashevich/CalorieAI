@@ -63,6 +63,30 @@ class AudioManager {
 
     async startCordovaRecording() {
         try {
+            // Request permissions if needed
+            if (window.cordova && window.cordova.plugins && window.cordova.plugins.permissions) {
+                const permissions = window.cordova.plugins.permissions;
+                
+                // Check RECORD_AUDIO permission
+                const hasPermission = await new Promise((resolve) => {
+                    permissions.checkPermission(permissions.RECORD_AUDIO, (status) => {
+                        if (status.hasPermission) {
+                            resolve(true);
+                        } else {
+                            // Request permission
+                            permissions.requestPermission(permissions.RECORD_AUDIO, (status) => {
+                                resolve(status.hasPermission);
+                            }, () => resolve(false));
+                        }
+                    }, () => resolve(false));
+                });
+                
+                if (!hasPermission) {
+                    this.showError('Microphone permission is required to record audio.');
+                    return;
+                }
+            }
+            
             const fileName = `calorieai_recording_${Date.now()}.wav`;
             this.cordovaAudioPath = cordova.file.dataDirectory + fileName;
     

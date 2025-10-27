@@ -30,6 +30,13 @@ const CordovaIntegration = {
             });
         }
         
+        // Request permissions first
+        this.requestPermissions().then(() => {
+            console.log('Permissions requested');
+        }).catch((err) => {
+            console.error('Error requesting permissions:', err);
+        });
+        
         // Check network status
         this.checkNetworkStatus();
         
@@ -217,18 +224,69 @@ const CordovaIntegration = {
         }
 
         return new Promise((resolve, reject) => {
-            // Cordova plugins handle permissions automatically
-            // Just check if they're available
-            const hasCamera = typeof navigator.camera !== 'undefined';
-            const hasCapture = typeof navigator.device !== 'undefined' && 
-                              typeof navigator.device.capture !== 'undefined';
-            
-            if (hasCamera && hasCapture) {
-                console.log('Camera and audio capture available');
-                resolve(true);
+            // Request Android runtime permissions
+            if (window.cordova && window.cordova.plugins && window.cordova.plugins.permissions) {
+                const permissions = window.cordova.plugins.permissions;
+                const permissionsToRequest = [
+                    permissions.RECORD_AUDIO,
+                    permissions.CAMERA,
+                    permissions.WRITE_EXTERNAL_STORAGE,
+                    permissions.READ_EXTERNAL_STORAGE
+                ];
+                
+                // Check if we have permissions
+                const checkPermission = (permission) => {
+                    return new Promise((res) => {
+                        permissions.checkPermission(permission, (status) => {
+                            if (status.hasPermission) {
+                                console.log(`Permission ${permission} already granted`);
+                                res(true);
+                            } else {
+                                // Request permission
+                                permissions.requestPermission(permission, (status) => {
+                                    if (status.hasPermission) {
+                                        console.log(`Permission ${permission} granted`);
+                                        res(true);
+                                    } else {
+                                        console.warn(`Permission ${permission} denied`);
+                                        res(false);
+                                    }
+                                }, () => {
+                                    console.error(`Error requesting permission ${permission}`);
+                                    res(false);
+                                });
+                            }
+                        }, () => {
+                            console.error(`Error checking permission ${permission}`);
+                            res(false);
+                        });
+                    });
+                };
+                
+                // Request all permissions
+                Promise.all(permissionsToRequest.map(checkPermission)).then((results) => {
+                    const allGranted = results.every(r => r === true);
+                    if (allGranted) {
+                        console.log('All permissions granted');
+                        resolve(true);
+                    } else {
+                        console.warn('Some permissions were not granted');
+                        resolve(false);
+                    }
+                });
             } else {
-                console.warn('Some permissions may not be available');
-                resolve(false);
+                // Fallback: Just check if plugins are available
+                const hasCamera = typeof navigator.camera !== 'undefined';
+                const hasCapture = typeof navigator.device !== 'undefined' && 
+                                  typeof navigator.device.capture !== 'undefined';
+                
+                if (hasCamera && hasCapture) {
+                    console.log('Camera and audio capture available');
+                    resolve(true);
+                } else {
+                    console.warn('Some permissions may not be available');
+                    resolve(false);
+                }
             }
         });
     },
