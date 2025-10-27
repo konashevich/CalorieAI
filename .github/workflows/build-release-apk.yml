@@ -53,11 +53,19 @@ jobs:
         cordova plugin add cordova-plugin-camera
         cordova plugin add cordova-plugin-device
         cordova plugin add cordova-plugin-network-information
+        cordova plugin add cordova-plugin-media
+        cordova plugin add cordova-plugin-android-permissions
       
-    - name: Copy latest web files to Cordova
+    - name: Sync web assets to Cordova (preserve Cordova-specific files)
       run: |
-        rm -rf calorieai-android/www/*
-        cp -r web/* calorieai-android/www/
+        # Only sync assets and css; do NOT overwrite Cordova index.html or JS
+        rsync -a --prune-empty-dirs \
+          --include="assets/***" \
+          --include="css/***" \
+          --include="manifest.json" \
+          --include="sw.js" \
+          --exclude="*" \
+          web/ calorieai-android/www/
         
     - name: Create build.json for signing
       working-directory: ./calorieai-android

@@ -12,6 +12,7 @@ class AudioManager {
         this.recordingStartTime = null;
         this.cordovaMedia = null;
         this.cordovaAudioPath = null;
+        this._deviceReady = false;
         
         this.elements = {
             recordBtn: document.getElementById('recordBtn'),
@@ -22,6 +23,11 @@ class AudioManager {
             recordActions: document.getElementById('recordActions'),
             recordingSection: document.querySelector('.recording-section')
         };
+
+        document.addEventListener('deviceready', () => {
+            this._deviceReady = true;
+            console.log('[AudioManager] deviceready');
+        }, false);
 
         this.init();
     }
@@ -41,6 +47,12 @@ class AudioManager {
     }
 
     isCordova() { return typeof cordova !== 'undefined'; }
+
+    isAndroidWebView() {
+        try {
+            return location.href.startsWith('file:///android_asset') || /Android/.test(navigator.userAgent);
+        } catch { return false; }
+    }
 
     async requestInitialPermissions() {
         console.log('[AudioManager] Requesting initial permissions...');
@@ -118,14 +130,23 @@ class AudioManager {
     async startRecording() {
         console.log('[AudioManager] Start recording requested');
         
+        // If likely in Android WebView but not yet ready, wait for deviceready then retry
+        if (this.isAndroidWebView() && !this._deviceReady) {
+            this.updateStatus('Preparing recorder...');
+            await new Promise((resolve) => {
+                const once = () => { document.removeEventListener('deviceready', once, false); resolve(); };
+                document.addEventListener('deviceready', once, false);
+            });
+        }
+
         // Always request permission before attempting to record
         const hasPermission = await this.requestMicPermission();
-        if (!hasPermission && !navigator.device?.capture?.captureAudio) {
+        if (!hasPermission && !(navigator.device?.capture?.captureAudio)) {
             this.showError('Microphone permission required. Please enable it in Settings → Apps → CalorieAI → Permissions.');
             return;
         }
 
-        if (this.isCordova()) await this.startCordovaRecording(); 
+        if (this.isCordova() || (this.isAndroidWebView() && this._deviceReady)) await this.startCordovaRecording();
         else await this.startWebRecording();
     }
 
