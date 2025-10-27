@@ -33,6 +33,143 @@ class GeminiAIManager {
     }
 
     /**
+     * Process food label image to extract nutritional information
+     * @param {Blob} imageBlob - The image blob of the food label
+     * @returns {Promise<Object>} - AI response with food name, calories, etc.
+     */
+    async processFoodLabel(imageBlob) {
+        if (!this.isInitialized()) {
+            throw new Error('Gemini AI not initialized. Please configure your API key in Settings.');
+        }
+
+        try {
+            console.log('Processing food label with Gemini AI...');
+            
+            // Convert image blob to base64
+            const base64Image = await this.blobToBase64(imageBlob);
+            const base64Data = base64Image.split(',')[1];
+            
+            // Determine MIME type
+            const mimeType = imageBlob.type || 'image/jpeg';
+            
+            // Build the food label recognition prompt
+            const prompt = this.buildFoodLabelPrompt();
+
+            // Make API call to Gemini with inline image data
+            const response = await fetch(`${this.baseUrl}/models/${this.modelName}:generateContent?key=${this.apiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            {
+                                text: prompt
+                            },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType,
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        temperature: 0.2,
+                        topK: 40,
+                        topP: 0.95,
+                        maxOutputTokens: 1024,
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`Gemini API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
+                throw new Error('Invalid response from Gemini API');
+            }
+
+            const text = result.candidates[0].content.parts[0].text;
+            
+            // Parse the response
+            const aiResponse = this.parseFoodLabelResponse(text);
+            
+            return aiResponse;
+
+        } catch (error) {
+            console.error('Gemini AI food label processing error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Build prompt for food label recognition
+     */
+    buildFoodLabelPrompt() {
+        return `
+Analyze this food label image and extract nutritional information.
+
+Return ONLY valid JSON in the following format:
+{
+  "name": string,                    // Product name
+  "brand": string,                   // Brand name (if visible)
+  "calories_per_100g": number,       // Calories per 100 grams
+  "serving_size": number,            // Serving size in grams (if specified)
+  "serving_calories": number,        // Calories per serving (if specified)
+  "confidence": "high"|"medium"|"low",
+  "notes": string                    // Any additional relevant information
+}
+
+Requirements:
+- Extract the exact product name from the label
+- If calories per 100g is not directly shown, calculate it from the serving information
+- If serving size is shown in other units (oz, ml, etc.), convert to grams using standard conversions
+- If the label is unclear or unreadable, set confidence to "low" and include notes
+- Be precise with numerical values
+- If a value cannot be determined, use null
+
+Return ONLY the JSON, no additional text.
+        `.trim();
+    }
+
+    /**
+     * Parse food label response from Gemini
+     */
+    parseFoodLabelResponse(responseText) {
+        try {
+            // Extract JSON from response
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                throw new Error('No JSON found in response');
+            }
+
+            const response = JSON.parse(jsonMatch[0]);
+            
+            // Validate required fields
+            if (!response.name) {
+                throw new Error('Food name is required');
+            }
+            
+            if (!response.calories_per_100g && !response.serving_calories) {
+                throw new Error('Calorie information is required');
+            }
+            
+            return response;
+
+        } catch (error) {
+            console.error('Error parsing food label response:', error);
+            console.log('Raw response:', responseText);
+            throw new Error('Failed to parse AI response: ' + error.message);
+        }
+    }
+
+    /**
      * Process multiple audio recordings in batch
      * @param {Array<Object>} audioDataArray - Array of audio data objects
      * @returns {Promise<Array<Object>>} - Array of AI responses

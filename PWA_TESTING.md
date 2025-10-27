@@ -32,12 +32,15 @@
 - [ ] **Meal Reminders**: Scheduled reminders function
 - [ ] **Notification Actions**: Action buttons work correctly
 
-#### **Offline Functionality Tests**
-- [ ] **Offline Indicator**: Shows when offline
-- [ ] **Data Persistence**: All data persists offline
-- [ ] **Audio Recording**: Recording works offline
-- [ ] **Queue System**: Requests queued when offline
-- [ ] **Sync Recovery**: Data syncs when back online
+#### **Processed Foods Tests**
+- [ ] **Camera Access**: Camera permission requested and granted
+- [ ] **Image Capture**: Camera opens and captures food label images
+- [ ] **AI Processing**: Images sent to Gemini AI for processing
+- [ ] **Data Extraction**: Nutritional data correctly extracted from labels
+- [ ] **Manual Entry**: Add button opens manual entry modal
+- [ ] **Food Storage**: Processed foods saved to local storage
+- [ ] **Edit/Delete**: Food items can be edited and deleted
+- [ ] **Add to Eat**: Foods can be added to daily calorie tracking
 
 ## 🌐 **Browser Testing Matrix**
 
@@ -49,6 +52,7 @@
 | PWA Install | ✅ | ⚠️ | ⚠️ | ✅ |
 | Push Notifications | ✅ | ✅ | ⚠️ | ✅ |
 | MediaRecorder | ✅ | ✅ | ✅ | ✅ |
+| Camera API | ✅ | ✅ | ✅ | ✅ |
 
 ### **Mobile Browsers**
 | Feature | Chrome Mobile | Safari Mobile | Samsung Internet | Firefox Mobile |
@@ -58,6 +62,7 @@
 | PWA Install | ✅ | ✅ | ⚠️ | ⚠️ |
 | Push Notifications | ✅ | ⚠️ | ✅ | ✅ |
 | MediaRecorder | ✅ | ✅ | ✅ | ✅ |
+| Camera API | ✅ | ✅ | ✅ | ✅ |
 
 ## 📱 **Mobile Testing Steps**
 

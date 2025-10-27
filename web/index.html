@@ -71,6 +71,9 @@
 
                 <!-- Records List -->
                 <div class="records-section">
+                    <div class="tip-section">
+                        <p>Tip: Tap Mic to tell to the AI what you ate or cooked and how much, e.g. "I ate a carrot, 50 grams", or "I cooked a miso soup with 1 tablespoon of miso paste and 100 grams of tofu, and teaspoon of dry dill"</p>
+                    </div>
                     <div class="records-list" id="recordsList">
                         <!-- Records will be populated by JavaScript -->
                     </div>
@@ -90,6 +93,133 @@
                 </div>
             </div>
             </section>
+
+            <!-- Processed Page -->
+            <section id="processed-page" class="page">
+                <div class="page-header">
+                    <div class="page-header-content">
+                        <h2>Processed Foods</h2>
+                    </div>
+                    <div class="page-header-actions">
+                        <button id="addProcessedManualBtn" class="btn-icon" title="Add manually" aria-label="Add processed food manually">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/>
+                            </svg>
+                        </button>
+                        <button id="captureFoodBtn" class="btn-camera" title="Scan food label" aria-label="Scan food label">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                                <path d="M12 15.2c-2.07 0-3.75-1.68-3.75-3.75S9.93 7.7 12 7.7s3.75 1.68 3.75 3.75S14.07 15.2 12 15.2zm0-6c-1.24 0-2.25 1.01-2.25 2.25S10.76 13.7 12 13.7s2.25-1.01 2.25-2.25S13.24 9.2 12 9.2z"/>
+                                <path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h4.05l1.83-2h4.24l1.83 2H20v12z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Processed Foods List -->
+                <div class="processed-section">
+                    <div class="processed-list" id="processedList">
+                        <div class="empty-state">
+                            <p>No processed foods yet. Scan a food label or add manually!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden camera input -->
+                <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden-input">
+            </section>
+
+            <!-- Processed Food Details Modal -->
+            <div class="modal" id="processedDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="processedDetailsTitle">Add Processed Food</h3>
+                        <div class="modal-actions">
+                            <button class="btn-icon" id="deleteProcessedBtn" title="Delete" aria-label="Delete" style="display: none;">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                </svg>
+                            </button>
+                            <button class="modal-close" id="closeProcessedModal">&times;</button>
+                        </div>
+                    </div>
+                    <div class="modal-body">
+                        <form id="processedDetailsForm">
+                            <div class="form-group">
+                                <label for="processedName">Food Name</label>
+                                <input type="text" id="processedName" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="processedBrand">Brand (optional)</label>
+                                <input type="text" id="processedBrand" class="form-input">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="processedCalsPer100g">Calories per 100g</label>
+                                    <input type="number" id="processedCalsPer100g" class="form-input" min="0" step="1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="processedServingSize">Serving Size (g)</label>
+                                    <input type="number" id="processedServingSize" class="form-input" min="0" step="1">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="processedServingCals">Calories per Serving</label>
+                                <input type="number" id="processedServingCals" class="form-input" min="0" step="1">
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="action-btn secondary" id="cancelProcessedEdit">Cancel</button>
+                                <button type="submit" class="action-btn primary">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add to Eat from Processed Modal -->
+            <div class="modal" id="addProcessedToEatModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="addToEatTitle">Add to Eaten</h3>
+                        <button class="modal-close" id="closeAddToEatModal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="addToEatForm">
+                            <div class="form-group">
+                                <label>Food: <strong id="addToEatFoodName"></strong></label>
+                            </div>
+                            <div class="form-group">
+                                <label for="addToEatAmount">Amount</label>
+                                <div class="form-row">
+                                    <input type="number" id="addToEatAmount" class="form-input" min="1" required>
+                                    <select id="addToEatUnit" class="form-input">
+                                        <option value="grams">grams</option>
+                                        <option value="serving">serving(s)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Calculated Calories: <strong id="calculatedCalories">0</strong> cal</label>
+                            </div>
+                            <div class="form-group">
+                                <label for="addToEatDate">Date</label>
+                                <select id="addToEatDate" class="form-input">
+                                    <option value="today">Today</option>
+                                    <option value="yesterday">Yesterday</option>
+                                    <option value="custom">Custom Date...</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="customDateGroup" style="display: none;">
+                                <label for="addToEatCustomDate">Custom Date</label>
+                                <input type="date" id="addToEatCustomDate" class="form-input">
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="action-btn secondary" id="cancelAddToEat">Cancel</button>
+                                <button type="submit" class="action-btn primary">Add to Eaten</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
 
             <!-- Cook Page -->
             <section id="cook-page" class="page">
@@ -383,15 +513,19 @@
         <nav class="bottom-nav">
             <button class="nav-btn active" data-page="record">
                 <span class="nav-icon">🎙️</span>
-                <span class="nav-label">Record</span>
+                <span class="nav-label">Recorded</span>
+            </button>
+            <button class="nav-btn" data-page="processed">
+                <span class="nav-icon">📦</span>
+                <span class="nav-label">Processed</span>
             </button>
             <button class="nav-btn" data-page="cook">
                 <span class="nav-icon">👨‍🍳</span>
-                <span class="nav-label">Cook</span>
+                <span class="nav-label">Cooked</span>
             </button>
             <button class="nav-btn" data-page="eat">
                 <span class="nav-icon">🍽️</span>
-                <span class="nav-label">Eat</span>
+                <span class="nav-label">Eaten</span>
             </button>
             <!-- Settings moved to header menu -->
         </nav>
@@ -423,6 +557,7 @@
     <script src="js/storage.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/gemini-ai.js"></script>
+    <script src="js/processed.js"></script>
     <script src="js/navigation.js"></script>
     <script src="js/app.js"></script>
     

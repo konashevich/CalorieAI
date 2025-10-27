@@ -6,7 +6,7 @@
 **CalorieAI** - AI-Powered Calorie Tracking App
 
 ### 1.2 Platform
-Web Application (HTML/CSS/JavaScript) → Android APK
+Web Application (HTML/CSS/JavaScript) with PWA capabilities → Android APK
 
 ### 1.3 Core Purpose
 A voice-controlled calorie tracking application that uses AI to transcribe audio recordings of food intake, automatically calculate calories, and manage cooking vs. eating activities through structured data processing.
@@ -185,8 +185,9 @@ CREATE TABLE eating_records (
 ## 5. User Interface Specifications
 
 ### 5.1 Navigation Structure
-- **Bottom Navigation Bar** with 3 tabs:
+- **Bottom Navigation Bar** with 4 tabs:
   - Record (microphone icon)
+  - Processed (package icon)
   - Cook (chef hat icon)
   - Eat (fork/knife icon)
 
@@ -216,7 +217,41 @@ CREATE TABLE eating_records (
 - **Tap transcribe icon**: View transcription results
 - **Long press record item**: Delete option
 
-### 5.3 Screen 2: Cook Page
+### 5.2B Screen 2: Processed Foods Page
+
+#### 5.2B.1 Layout Components
+- **Header**: "Processed Foods" + camera and manual add buttons
+- **Processed Foods List**:
+  - Scanned and manually added processed foods
+  - Each item shows: name, brand, calories per 100g, serving info
+  - Edit and delete buttons per item
+  - Quick add to Eat functionality
+
+#### 5.2B.2 Food Item Components
+- **Food name** and brand (if available)
+- **Nutritional info**: calories per 100g, serving size, calories per serving
+- **Edit button** (pencil icon) - opens details modal
+- **Delete button** (trash icon) - removes food item
+- **Quick Add input** - weight in grams with "Add to Eat" button
+
+#### 5.2B.3 Camera Scanning
+- **Camera button** - triggers device camera for food label scanning
+- **AI processing** - sends image to Gemini AI for nutritional data extraction
+- **Modal review** - user can edit extracted data before saving
+
+#### 5.2B.4 Manual Entry
+- **Add button** - opens modal for manual food entry
+- **Form fields**: name, brand, calories per 100g, serving size, calories per serving
+- **Validation** - required fields and reasonable value ranges
+
+#### 5.2B.5 Interactions
+- **Tap camera button**: Open camera for scanning
+- **Tap add button**: Open manual entry modal
+- **Tap edit button**: Open food details for editing
+- **Tap delete button**: Remove food with confirmation
+- **Enter weight + tap add**: Quick add to today's Eat page
+
+### 5.3 Screen 3: Cook Page
 
 #### 5.3.1 Layout Components
 - **Header**: "Cooked Meals" + date filter
@@ -252,7 +287,7 @@ CREATE TABLE eating_records (
 - **Tap edit ingredient**: Modify ingredient details
 - **Tap add ingredient**: Add new ingredient to meal
 
-### 5.4 Screen 3: Eat Page
+### 5.4 Screen 4: Eat Page
 
 #### 5.4.1 Layout Components
 - **Header**: "Daily Calories" + date navigation
@@ -464,7 +499,7 @@ CREATE TABLE eating_records (
 ## 12. Implementation Priority
 
 ### 12.1 Phase 1A - Web Application (MVP)
-1. **HTML structure** - Three main pages with navigation
+1. **HTML structure** - Four main pages with navigation
 2. **CSS styling** - Light/dark theme system following OS preference
 3. **JavaScript audio recording** - MediaRecorder API implementation
 4. **Local storage** - localStorage for data persistence

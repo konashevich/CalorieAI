@@ -6,7 +6,7 @@
 class NavigationManager {
     constructor() {
         this.currentPage = 'record';
-        this.pages = ['record', 'cook', 'eat'];
+        this.pages = ['record', 'processed', 'cook', 'eat'];
         this.init();
     }
 
@@ -86,6 +86,12 @@ class NavigationManager {
                 // Refresh records list
                 if (window.app && window.app.recordManager) {
                     window.app.recordManager.refreshRecordsList();
+                }
+                break;
+            case 'processed':
+                // Refresh processed foods list
+                if (window.app && window.app.processedManager) {
+                    window.app.processedManager.refreshProcessedList();
                 }
                 break;
             case 'cook':

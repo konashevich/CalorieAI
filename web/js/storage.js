@@ -10,6 +10,7 @@ class StorageManager {
             COOKING_RECORDS: 'calorieai_cooking_records',
             EATING_RECORDS: 'calorieai_eating_records',
             INGREDIENTS: 'calorieai_ingredients',
+            PROCESSED_FOODS: 'calorieai_processed_foods',
             APP_SETTINGS: 'calorieai_settings'
         };
         this.init();
@@ -254,6 +255,58 @@ class StorageManager {
         return foods.filter(food => food.eatenDate === date);
     }
 
+    // Processed Foods operations
+    getProcessedFoods() {
+        return this.getData(this.storageKeys.PROCESSED_FOODS);
+    }
+
+    getProcessedFood(id) {
+        const foods = this.getProcessedFoods();
+        return foods.find(food => food.id === id);
+    }
+
+    addProcessedFood(foodData) {
+        const foods = this.getProcessedFoods();
+        const newFood = {
+            id: this.generateId(),
+            name: foodData.name,
+            caloriesPer100g: foodData.caloriesPer100g || 0,
+            servingSize: foodData.servingSize || null,
+            servingCalories: foodData.servingCalories || null,
+            brand: foodData.brand || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            ...foodData
+        };
+
+        foods.unshift(newFood);
+        this.setData(this.storageKeys.PROCESSED_FOODS, foods);
+        return newFood;
+    }
+
+    updateProcessedFood(id, updateData) {
+        const foods = this.getProcessedFoods();
+        const index = foods.findIndex(food => food.id === id);
+        
+        if (index !== -1) {
+            foods[index] = { 
+                ...foods[index], 
+                ...updateData, 
+                updatedAt: new Date().toISOString() 
+            };
+            this.setData(this.storageKeys.PROCESSED_FOODS, foods);
+            return foods[index];
+        }
+        return null;
+    }
+
+    deleteProcessedFood(id) {
+        const foods = this.getProcessedFoods();
+        const filteredFoods = foods.filter(food => food.id !== id);
+        this.setData(this.storageKeys.PROCESSED_FOODS, filteredFoods);
+        return filteredFoods.length < foods.length;
+    }
+
     // Utility functions
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -457,6 +510,7 @@ class StorageManager {
             cookingRecords: this.getCookingRecords(),
             ingredients: this.getIngredients(),
             eatingRecords: this.getEatingRecords(),
+            processedFoods: this.getProcessedFoods(),
             settings: this.getData(this.storageKeys.APP_SETTINGS),
             meta: {
                 exportDate: new Date().toISOString(),
@@ -483,6 +537,9 @@ class StorageManager {
             }
             if (data.eatingRecords) {
                 this.setData(this.storageKeys.EATING_RECORDS, data.eatingRecords);
+            }
+            if (data.processedFoods) {
+                this.setData(this.storageKeys.PROCESSED_FOODS, data.processedFoods);
             }
             if (data.settings) {
                 this.setData(this.storageKeys.APP_SETTINGS, data.settings);

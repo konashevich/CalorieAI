@@ -10,6 +10,7 @@ class CalorieAIApp {
         this.audio = null;
         this.ai = null;
         this.recordManager = null;
+        this.processedManager = null;
         this.cookManager = null;
         this.eatManager = null;
         
@@ -29,6 +30,7 @@ class CalorieAIApp {
             
             // Initialize page managers
             this.recordManager = new RecordManager(this.storage, this.getActiveAIManager.bind(this));
+            this.processedManager = new ProcessedManager(this.storage, this.getActiveAIManager.bind(this));
             this.cookManager = new CookManager(this.storage);
             this.eatManager = new EatManager(this.storage);
             
@@ -55,6 +57,7 @@ class CalorieAIApp {
 
     refreshAllPages() {
         if (this.recordManager) this.recordManager.refreshRecordsList();
+        if (this.processedManager) this.processedManager.refreshProcessedList();
         if (this.cookManager) this.cookManager.refreshMealsList();
         if (this.eatManager) {
             this.eatManager.refreshFoodList();
@@ -1191,7 +1194,7 @@ class CookManager {
                 </div>
                 <div class="meal-actions">
                     <input type="number" class="serving-input" data-meal-id="${meal.id}" placeholder="Serving (g)" min="1" max="${meal.remainingWeight}" value="100">
-                    <button class="add-serving-btn" onclick="window.app.cookManager.addServing('${meal.id}')">Add to Eat</button>
+                    <button class="add-serving-btn" onclick="window.app.cookManager.addServing('${meal.id}')">Add to Eaten</button>
                 </div>
             </div>
         `;
@@ -1278,7 +1281,7 @@ class CookManager {
                     <div class="serving-input-group">
                         <input type="number" id="modal-serving-weight" value="100" min="1" max="${meal.remainingWeight}">
                         <span>g (${Math.round(100 * caloriesPerGram)} cal)</span>
-                        <button class="btn-primary" onclick="window.app.cookManager.addServingFromModal('${mealId}')">Add to Eat</button>
+                        <button class="btn-primary" onclick="window.app.cookManager.addServingFromModal('${mealId}')">Add to Eaten</button>
                     </div>
                 </div>
             </div>
