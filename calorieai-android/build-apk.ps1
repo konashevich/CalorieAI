@@ -1,139 +1,186 @@
 # CalorieAI Android APK Build Script
-# This script builds the Android APK for CalorieAI
+# Builds the Android APK for CalorieAI with environment checks, setup, and optional web sync
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "CalorieAI Android APK Build Script" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host ""
+# ---------------------------
+# Styling helpers
+# ---------------------------
+function Write-Title($text) { Write-Host "`n========================================" -ForegroundColor Cyan; Write-Host $text -ForegroundColor Cyan; Write-Host "========================================`n" -ForegroundColor Cyan }
+function Write-Ok($text)    { Write-Host "[OK] $text" -ForegroundColor Green }
+function Write-Info($text)  { Write-Host "$text" -ForegroundColor Yellow }
+function Write-Err($text)   { Write-Host "[ERROR] $text" -ForegroundColor Red }
 
-# Check if we're in the right directory
-if (-not (Test-Path "config.xml")) {
-    Write-Host "Error: config.xml not found. Please run this script from the calorieai-android directory." -ForegroundColor Red
-    exit 1
-}
-
-# Menu
-Write-Host "Select build type:" -ForegroundColor Yellow
-Write-Host "1. Debug APK (unsigned, for testing)"
-Write-Host "2. Release APK (requires keystore)"
-Write-Host "3. Clean build (removes platform and reinstalls)"
-Write-Host "4. Check requirements"
-Write-Host "5. Exit"
-Write-Host ""
-
-$choice = Read-Host "Enter your choice (1-5)"
-
-switch ($choice) {
-    "1" {
-        Write-Host ""
-        Write-Host "Building DEBUG APK..." -ForegroundColor Green
-        Write-Host ""
-        
-        # Build debug APK
-        npx cordova build android --debug
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host ""
-            Write-Host "========================================" -ForegroundColor Green
-            Write-Host "DEBUG APK BUILD SUCCESSFUL!" -ForegroundColor Green
-            Write-Host "========================================" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "APK Location:" -ForegroundColor Yellow
-            Write-Host "platforms\android\app\build\outputs\apk\debug\app-debug.apk" -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "You can install this APK on your Android device for testing." -ForegroundColor Yellow
-            Write-Host "Enable 'Install from Unknown Sources' in your device settings." -ForegroundColor Yellow
-        } else {
-            Write-Host ""
-            Write-Host "Build failed! Check the error messages above." -ForegroundColor Red
-        }
-    }
-    
-    "2" {
-        Write-Host ""
-        Write-Host "Building RELEASE APK..." -ForegroundColor Green
-        Write-Host ""
-        Write-Host "Note: You need a keystore file to sign the release APK." -ForegroundColor Yellow
-        Write-Host "If you don't have one, choose option 1 for debug APK first." -ForegroundColor Yellow
-        Write-Host ""
-        
-        $proceed = Read-Host "Do you have a keystore ready? (y/n)"
-        
-        if ($proceed -eq "y" -or $proceed -eq "Y") {
-            # Build release APK
-            npx cordova build android --release
-            
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host ""
-                Write-Host "========================================" -ForegroundColor Green
-                Write-Host "RELEASE APK BUILD SUCCESSFUL!" -ForegroundColor Green
-                Write-Host "========================================" -ForegroundColor Green
-                Write-Host ""
-                Write-Host "Unsigned APK Location:" -ForegroundColor Yellow
-                Write-Host "platforms\android\app\build\outputs\apk\release\app-release-unsigned.apk" -ForegroundColor Cyan
-                Write-Host ""
-                Write-Host "You need to sign this APK before distributing it." -ForegroundColor Yellow
-                Write-Host "See the BUILD_GUIDE.md for signing instructions." -ForegroundColor Yellow
-            } else {
-                Write-Host ""
-                Write-Host "Build failed! Check the error messages above." -ForegroundColor Red
-            }
-        } else {
-            Write-Host "Build cancelled." -ForegroundColor Yellow
-        }
-    }
-    
-    "3" {
-        Write-Host ""
-        Write-Host "Cleaning build..." -ForegroundColor Green
-        Write-Host ""
-        
-        # Remove platforms
-        if (Test-Path "platforms\android") {
-            Write-Host "Removing Android platform..." -ForegroundColor Yellow
-            npx cordova platform remove android
-        }
-        
-        # Re-add platform
-        Write-Host "Re-adding Android platform..." -ForegroundColor Yellow
-        npx cordova platform add android
-        
-        Write-Host ""
-        Write-Host "Clean complete! You can now build the APK." -ForegroundColor Green
-    }
-    
-    "4" {
-        Write-Host ""
-        Write-Host "Checking build requirements..." -ForegroundColor Green
-        Write-Host ""
-        
-        # Check Cordova
-        Write-Host "Checking Cordova..." -ForegroundColor Yellow
-        npx cordova --version
-        
-        # Check Android requirements
-        Write-Host ""
-        Write-Host "Checking Android requirements..." -ForegroundColor Yellow
-        npx cordova requirements android
-        
-        Write-Host ""
-        Write-Host "If you see errors above, you may need to install:" -ForegroundColor Yellow
-        Write-Host "- Android Studio (https://developer.android.com/studio)" -ForegroundColor Cyan
-        Write-Host "- Java Development Kit (JDK 17 or later)" -ForegroundColor Cyan
-        Write-Host "- Gradle (usually included with Android Studio)" -ForegroundColor Cyan
-    }
-    
-    "5" {
-        Write-Host "Exiting..." -ForegroundColor Yellow
-        exit 0
-    }
-    
-    default {
-        Write-Host "Invalid choice. Exiting..." -ForegroundColor Red
+# ---------------------------
+# Utility helpers
+# ---------------------------
+function Assert-InProjectRoot {
+    if (-not (Test-Path "config.xml")) {
+        Write-Err "config.xml not found. Run this script from the calorieai-android directory."
         exit 1
     }
 }
 
+function Test-CommandExists($name) { return $null -ne (Get-Command $name -ErrorAction SilentlyContinue) }
+
+function Run-Cmd($command, [switch]$IgnoreExitCode) {
+    Write-Info "> $command"
+    & cmd.exe /c $command
+    $code = $LASTEXITCODE
+    if (-not $IgnoreExitCode -and $code -ne 0) { throw "Command failed ($code): $command" }
+}
+
+function Ensure-Npm {
+    if (-not (Test-CommandExists node)) { throw "Node.js is not installed or not in PATH." }
+    if (-not (Test-CommandExists npm))  { throw "npm is not installed or not in PATH." }
+    if (-not (Test-CommandExists npx))  { throw "npx is not available (npm missing)." }
+    Write-Ok "Node.js, npm, and npx detected"
+}
+
+function Ensure-NpmPackages {
+    $needsInstall = -not (Test-Path "node_modules")
+    if (-not $needsInstall) {
+        try {
+            $lock = Get-Item "package-lock.json" -ErrorAction Stop
+            $mods = Get-Item "node_modules" -ErrorAction Stop
+            if ($lock.LastWriteTime -gt $mods.LastWriteTime) { $needsInstall = $true }
+        } catch { $needsInstall = $true }
+    }
+    if ($needsInstall) {
+        if (Test-Path "package-lock.json") {
+            Write-Info "Installing npm dependencies (npm ci)..."
+            Run-Cmd "npm ci"
+        } else {
+            Write-Info "Installing npm dependencies (npm install)..."
+            Run-Cmd "npm install"
+        }
+        Write-Ok "npm dependencies installed"
+    } else {
+        Write-Ok "npm dependencies already installed"
+    }
+}
+
+function Ensure-CordovaCLI {
+    Write-Info "Checking Cordova CLI via npx..."
+    & npx --yes cordova --version | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Cordova CLI not available via npx. Ensure devDependencies include 'cordova'." }
+    Write-Ok "Cordova CLI available"
+}
+
+function Ensure-AndroidPlatform {
+    if (Test-Path "platforms\android\app\build.gradle") { Write-Ok "Android platform already present"; return }
+    Write-Info "Adding Android platform (cordova-android)..."
+    Run-Cmd "npx cordova platform add android"
+    Write-Ok "Android platform added"
+}
+
+function Sync-WebFilesIfPresent {
+    try {
+        $parent = Resolve-Path ".." -ErrorAction Stop
+        $webPath = Join-Path $parent.Path "web"
+        if (Test-Path "$webPath\index.html") {
+            Write-Info "Syncing web files from ../web to ./www ..."
+            try {
+                if (Test-Path "www") { Remove-Item -Path "www\*" -Recurse -Force -ErrorAction SilentlyContinue }
+                Copy-Item -Path "$webPath\*" -Destination "www\" -Recurse -Force
+                Write-Ok "Web files synced"
+            } catch { Write-Err "Failed to sync web files: $($_.Exception.Message)" }
+        } else {
+            Write-Info "No ../web folder with index.html found; skipping web sync"
+        }
+    } catch { Write-Info "Parent directory not resolvable; skipping web sync" }
+}
+
+function Ensure-Prepare {
+    Write-Info "Preparing Cordova project (plugins, www, Android resources)..."
+    Run-Cmd "npx cordova prepare android"
+    Write-Ok "Cordova prepare complete"
+}
+
+function Show-EnvHints {
+    Write-Host "`nEnvironment hints:" -ForegroundColor DarkCyan
+    Write-Host "- JAVA_HOME: $env:JAVA_HOME"
+    Write-Host "- ANDROID_HOME: $env:ANDROID_HOME"
+    Write-Host "- ANDROID_SDK_ROOT: $env:ANDROID_SDK_ROOT"
+}
+
+function Run-RequirementsCheck {
+    Write-Info "Checking Cordova/Android requirements..."
+    & npx cordova requirements android
+    Write-Host "`nIf any items show as missing, install or configure them and re-run." -ForegroundColor Yellow
+    Show-EnvHints
+}
+
+function Preflight {
+    Assert-InProjectRoot
+    Ensure-Npm
+    Ensure-NpmPackages
+    Ensure-CordovaCLI
+    Ensure-AndroidPlatform
+    Sync-WebFilesIfPresent
+    Ensure-Prepare
+}
+
+function Build-Debug {
+    Write-Info "Building DEBUG APK..."
+    Run-Cmd "npx cordova build android --debug"
+    $apk = "platforms\android\app\build\outputs\apk\debug\app-debug.apk"
+    if (Test-Path $apk) {
+        Write-Title "DEBUG APK BUILD SUCCESSFUL!"
+        Write-Info "APK Location:"
+        Write-Host $apk -ForegroundColor Cyan
+        Write-Host "Install on device for testing. Enable 'Install from Unknown Sources' on your device." -ForegroundColor Yellow
+    } else { throw "Build completed but APK not found at expected path: $apk" }
+}
+
+function Build-Release {
+    Write-Info "Building RELEASE APK..."
+    Write-Host "Note: For a signed release, create build.json with keystore details (see BUILD_GUIDE.md)." -ForegroundColor Yellow
+    Run-Cmd "npx cordova build android --release"
+    $unsigned = "platforms\android\app\build\outputs\apk\release\app-release-unsigned.apk"
+    $signed   = "platforms\android\app\build\outputs\apk\release\app-release.apk"
+    if (Test-Path $signed) {
+        Write-Title "SIGNED RELEASE APK BUILD SUCCESSFUL!"; Write-Info "APK Location:"; Write-Host $signed -ForegroundColor Cyan
+    } elseif (Test-Path $unsigned) {
+        Write-Title "RELEASE APK BUILD SUCCESSFUL (UNSIGNED)!"; Write-Info "Unsigned APK Location:"; Write-Host $unsigned -ForegroundColor Cyan; Write-Host "Sign the APK before distribution. See BUILD_GUIDE.md for steps." -ForegroundColor Yellow
+    } else { throw "Build completed but release APK not found at expected path." }
+}
+
+function Clean-RebuildPlatform {
+    Write-Info "Cleaning Android platform..."
+    if (Test-Path "platforms\android") { Run-Cmd "npx cordova platform remove android" -IgnoreExitCode }
+    Ensure-AndroidPlatform
+    Ensure-Prepare
+    Write-Ok "Clean complete."
+}
+
+# ---------------------------
+# Script start
+# ---------------------------
+Write-Title "CalorieAI Android APK Build Script"
+Assert-InProjectRoot
+
+Write-Host "Select build type:" -ForegroundColor Yellow
+Write-Host "1. Debug APK (unsigned, for testing)"
+Write-Host "2. Release APK (signed if build.json present)"
+Write-Host "3. Clean build (remove and re-add Android platform)"
+Write-Host "4. Check requirements"
+Write-Host "5. Sync web assets (../web -> ./www)"
+Write-Host "6. Exit"
 Write-Host ""
-Write-Host "Press any key to exit..."
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+$choice = Read-Host "Enter your choice (1-6)"
+
+try {
+    switch ($choice) {
+        "1" { Preflight; Build-Debug }
+        "2" { Preflight; Build-Release }
+        "3" { Clean-RebuildPlatform }
+        "4" { Run-RequirementsCheck }
+        "5" { Sync-WebFilesIfPresent; Ensure-Prepare; Write-Ok "Web assets synced and prepared." }
+        "6" { Write-Info "Exiting..."; exit 0 }
+        default { Write-Err "Invalid choice. Exiting..."; exit 1 }
+    }
+    Write-Host "`nPress any key to exit..."; $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+} catch {
+    Write-Err $_; Write-Host "`nTip: Run option 4 to diagnose environment issues." -ForegroundColor Yellow; Show-EnvHints
+    Write-Host "`nPress any key to exit..."; $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown"); exit 1
+}

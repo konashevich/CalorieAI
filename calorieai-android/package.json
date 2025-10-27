@@ -2,10 +2,17 @@
   "name": "com.calorieai.app",
   "displayName": "CalorieAI",
   "version": "1.0.0",
-  "description": "A sample Apache Cordova application that responds to the deviceready event.",
+  "description": "CalorieAI Cordova Android project",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prebuild": "node -e \"process.exit(0)\"",
+    "build:debug": "powershell -ExecutionPolicy Bypass -File ./build-apk.ps1 && echo Built debug APK",
+    "build:release": "powershell -ExecutionPolicy Bypass -File ./build-apk.ps1 && echo Built release APK",
+    "android:debug": "npx cordova build android --debug",
+    "android:release": "npx cordova build android --release",
+    "android:run": "npx cordova run android",
+    "android:requirements": "npx cordova requirements android",
+    "clean": "npx cordova platform remove android && npx cordova platform add android"
   },
   "keywords": [
     "ecosystem:cordova"
@@ -13,6 +20,7 @@
   "author": "Apache Cordova Team",
   "license": "Apache-2.0",
   "devDependencies": {
+    "cordova": "^12.0.0",
     "cordova-android": "^14.0.1",
     "cordova-plugin-android-permissions": "^1.1.5",
     "cordova-plugin-camera": "^8.0.0",
