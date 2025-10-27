@@ -2123,10 +2123,50 @@ class EatManager {
     }
 }
 
-// Initialize app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+// Wait for the deviceready event to ensure Cordova is initialized
+document.addEventListener('deviceready', onDeviceReady, false);
+
+function onDeviceReady() {
+    console.log('Cordova is ready. Initializing the app.');
+    
+    // Now that the device is ready, initialize your app
     window.app = new CalorieAIApp();
-});
+    
+    // Request permissions
+    requestPermissions();
+}
+
+function requestPermissions() {
+    const permissions = cordova.plugins.permissions;
+    const requiredPermissions = [
+        permissions.CAMERA,
+        permissions.RECORD_AUDIO
+    ];
+
+    permissions.checkPermission(requiredPermissions[0], (status) => {
+        if (!status.hasPermission) {
+            permissions.requestPermissions(requiredPermissions, (status) => {
+                if (!status.hasPermission) {
+                    console.warn('Permissions not granted');
+                    alert('Camera and microphone permissions are required for the app to function fully.');
+                }
+            }, (error) => {
+                console.error('Error requesting permissions:', error);
+            });
+        }
+    }, (error) => {
+        console.error('Error checking permissions:', error);
+    });
+}
+
+// Fallback for when not running in Cordova
+if (typeof window.cordova === 'undefined') {
+    console.log('Cordova not found. Running in a standard browser environment.');
+    document.addEventListener('DOMContentLoaded', () => {
+        window.app = new CalorieAIApp();
+    });
+}
+
 
 // Export classes for potential external use
 window.CalorieAIApp = CalorieAIApp;
