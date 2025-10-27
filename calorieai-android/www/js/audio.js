@@ -127,16 +127,22 @@ class AudioManager {
         return false;
     }
 
+    async waitForCaptureReady(timeoutMs = 3000) {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            if (navigator.device?.capture?.captureAudio) return true;
+            await new Promise(r => setTimeout(r, 100));
+        }
+        return false;
+    }
+
     async startRecording() {
         console.log('[AudioManager] Start recording requested');
         
-        // If likely in Android WebView but not yet ready, wait for deviceready then retry
-        if (this.isAndroidWebView() && !this._deviceReady) {
+        // If likely in Android WebView, briefly wait for capture API to be ready
+        if (this.isAndroidWebView() && !navigator.device?.capture?.captureAudio) {
             this.updateStatus('Preparing recorder...');
-            await new Promise((resolve) => {
-                const once = () => { document.removeEventListener('deviceready', once, false); resolve(); };
-                document.addEventListener('deviceready', once, false);
-            });
+            await this.waitForCaptureReady(3000);
         }
 
         // Always request permission before attempting to record
@@ -146,7 +152,7 @@ class AudioManager {
             return;
         }
 
-        if (this.isCordova() || (this.isAndroidWebView() && this._deviceReady)) await this.startCordovaRecording();
+        if (this.isCordova() || (this.isAndroidWebView() && navigator.device?.capture?.captureAudio)) await this.startCordovaRecording();
         else await this.startWebRecording();
     }
 
