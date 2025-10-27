@@ -27,14 +27,6 @@
         <preference name="FadeSplashScreen" value="true" />
         <preference name="FadeSplashScreenDuration" value="300" />
         
-        <!-- Android Icons -->
-        <icon density="ldpi" src="www/assets/icon-192x192.svg" />
-        <icon density="mdpi" src="www/assets/icon-192x192.svg" />
-        <icon density="hdpi" src="www/assets/icon-192x192.svg" />
-        <icon density="xhdpi" src="www/assets/icon-512x512.svg" />
-        <icon density="xxhdpi" src="www/assets/icon-512x512.svg" />
-        <icon density="xxxhdpi" src="www/assets/icon-512x512.svg" />
-        
         <!-- Permissions -->
         <config-file target="AndroidManifest.xml" parent="/*">
             <uses-permission android:name="android.permission.RECORD_AUDIO" />
