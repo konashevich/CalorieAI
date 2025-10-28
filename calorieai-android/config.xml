@@ -38,10 +38,8 @@
     <access origin="*" />
     <allow-navigation href="*" />
 
-    <!-- Core Cordova Plugins -->
-    <plugin name="cordova-plugin-media-capture" spec="^6.0.0" />
-    <plugin name="cordova-plugin-media" spec="^7.0.0" />
-    <plugin name="cordova-plugin-camera" spec="^7.0.0" />
-    <plugin name="cordova-plugin-file" spec="^8.0.0" />
+    <!-- Required Cordova Plugins -->
     <plugin name="cordova-plugin-android-permissions" spec="^1.1.5" />
+    <plugin name="cordova-plugin-file" spec="^8.0.0" />
+    <plugin name="cordova-plugin-aac-recorder" spec="./plugins/cordova-plugin-aac-recorder" />
 </widget>

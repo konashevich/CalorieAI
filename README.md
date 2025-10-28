@@ -194,3 +194,16 @@ The CalorieAI web application is now a fully-featured Progressive Web App with:
 - Some PWA features need HTTPS in production
 
 Ready for Cordova/PhoneGap conversion to Android APK!
+
+# CalorieAI
+
+## Android In-App Recording (Single Path)
+- Recording: native AAC (M4A) via lightweight Cordova plugin.
+- No web fallbacks, no native capture UI, no 3GP/AMR or WebM.
+- First mic tap triggers Android permission dialog.
+
+### Build Android
+- From `calorieai-android/` run:
+- `npm run android:debug` or `npm run android:release`
+
+See `ANDROID_IN_APP_AAC_RECORDING_PLAN.md` for details.

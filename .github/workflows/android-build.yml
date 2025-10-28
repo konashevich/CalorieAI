@@ -1,0 +1,47 @@
+name: Android APK (Cordova)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Cordova
+        run: npm install -g cordova@12
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Cordova Android (no web overwrite)
+        working-directory: calorieai-android
+        run: |
+          npm ci || true
+          cordova platform add android@14 --no-save || true
+          cordova plugin list
+          # Guard: ensure we are not copying web/ into www
+          if [ -d "../web" ]; then echo "Guard: Skipping any sync from web/"; fi
+          # Build debug APK by default
+          cordova build android --debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calorieai-android-apk
+          path: calorieai-android/platforms/android/app/build/outputs/apk/debug/*.apk

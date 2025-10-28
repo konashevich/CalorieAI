@@ -209,41 +209,22 @@ Return ONLY the JSON, no additional text.
 
         try {
             console.log('Processing with Gemini AI...');
-            
+            // Enforce supported MIME type default
+            const mimeType = (audioData.mimeType || '').toLowerCase();
+            const preferredMime = mimeType || 'audio/m4a';
+
             // Convert audio blob to base64 for inline data
             const base64Audio = await this.blobToBase64(audioData.blob);
-            // Remove data URL prefix (e.g., "data:audio/webm;base64,")
             const base64Data = base64Audio.split(',')[1];
-            
-            // Build the analysis prompt
+
             const prompt = this.buildFoodAnalysisPrompt();
 
-            // Make API call to Gemini with inline audio data
             const response = await fetch(`${this.baseUrl}/models/${this.modelName}:generateContent?key=${this.apiKey}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            {
-                                text: prompt
-                            },
-                            {
-                                inlineData: {
-                                    mimeType: audioData.mimeType,
-                                    data: base64Data
-                                }
-                            }
-                        ]
-                    }],
-                    generationConfig: {
-                        temperature: 0.3,
-                        topK: 40,
-                        topP: 0.95,
-                        maxOutputTokens: 2048,
-                    }
+                    contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: preferredMime, data: base64Data } } ] }],
+                    generationConfig: { temperature: 0.3, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
                 })
             });
 
@@ -253,18 +234,13 @@ Return ONLY the JSON, no additional text.
             }
 
             const result = await response.json();
-            
             if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
                 throw new Error('Invalid response from Gemini API');
             }
 
             const text = result.candidates[0].content.parts[0].text;
-            
-            // Parse the response
             const aiResponse = this.parseGeminiResponse(text);
-            
             return aiResponse;
-
         } catch (error) {
             console.error('Gemini AI processing error:', error);
             throw error;
