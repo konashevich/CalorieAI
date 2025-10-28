@@ -136,6 +136,24 @@ class AudioManager {
         return false;
     }
 
+    getPreferredMediaOptions() {
+        try {
+            if (typeof MediaRecorder === 'undefined') return null;
+            const candidates = [
+                'audio/mp4', // AAC in MP4 container
+                'audio/aac',
+                'audio/ogg;codecs=vorbis', // if device supports true Vorbis
+                'audio/ogg' // some UA may map to Vorbis
+            ];
+            for (const c of candidates) {
+                if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) {
+                    return { mimeType: c };
+                }
+            }
+        } catch {}
+        return null;
+    }
+
     async startRecording() {
         console.log('[AudioManager] Start recording requested');
         
@@ -149,6 +167,17 @@ class AudioManager {
         const hasPermission = await this.requestMicPermission();
         if (!hasPermission && !(navigator.device?.capture?.captureAudio)) {
             this.showError('Microphone permission required. Please enable it in Settings → Apps → CalorieAI → Permissions.');
+            return;
+        }
+
+        const preferred = this.getPreferredMediaOptions();
+        if (preferred && navigator.mediaDevices?.getUserMedia) {
+            await this.startWebRecording(preferred);
+            return;
+        }
+
+        if (navigator.mediaDevices?.getUserMedia) {
+            await this.startWavRecording();
             return;
         }
 
@@ -235,12 +264,12 @@ class AudioManager {
         }
     }
 
-    async startWebRecording() {
+    async startWebRecording(options) {
         try {
             if (!navigator.mediaDevices?.getUserMedia) throw new Error('MediaRecorder API not supported');
-            this.audioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
-            const options = this.getSupportedMimeType();
-            this.mediaRecorder = new MediaRecorder(this.audioStream, options);
+            this.audioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+            const recOptions = options || this.getSupportedMimeType();
+            this.mediaRecorder = new MediaRecorder(this.audioStream, recOptions);
             this.audioChunks = []; this.recordingStartTime = Date.now();
             this.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) this.audioChunks.push(e.data); };
             this.mediaRecorder.onstop = () => setTimeout(() => this.processRecording(), 100);
@@ -291,10 +320,45 @@ class AudioManager {
         } catch (error) { console.error('[AudioManager] Web processing failed:', error); this.showError('Failed to process recording.'); this.resetRecordingUI(); }
     }
 
+    async reencodeToWebmIfNeeded() {
+        try {
+            const mt = (this.currentRecording?.mimeType || '').toLowerCase();
+            if (!this.currentRecording || !mt.includes('3gp')) return false;
+            if (typeof MediaRecorder === 'undefined') return false;
+            const canWebm = MediaRecorder.isTypeSupported && (MediaRecorder.isTypeSupported('audio/webm;codecs=opus') || MediaRecorder.isTypeSupported('audio/webm'));
+            if (!canWebm) return false;
+            const blob = this.currentRecording.blob;
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio();
+            audio.src = url;
+            audio.crossOrigin = 'anonymous';
+            const stream = audio.captureStream ? audio.captureStream() : (audio.mozCaptureStream && audio.mozCaptureStream());
+            if (!stream) { URL.revokeObjectURL(url); return false; }
+            const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            const chunks = [];
+            mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+            const done = new Promise((resolve) => { mr.onstop = () => resolve(); audio.onended = () => { try { mr.stop(); } catch {} }; });
+            mr.start(250);
+            await audio.play().catch(() => {});
+            await done;
+            const webm = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+            URL.revokeObjectURL(url);
+            if (webm.size > 0) {
+                this.currentRecording = { blob: webm, mimeType: webm.type, size: webm.size, duration: this.currentRecording.duration };
+                return true;
+            }
+            return false;
+        } catch (e) { console.warn('Re-encode to webm failed:', e); return false; }
+    }
+
     async sendToAI() {
         if (!this.currentRecording) { this.showError('No recording to send.'); return; }
         try {
             this.showLoading('Processing with AI...');
+
+            // If recorded as 3gp, try to re-encode to webm for better AI compatibility
+            await this.reencodeToWebmIfNeeded();
+
             const ext = (() => { const mt = (this.currentRecording.mimeType || '').toLowerCase(); if (mt.includes('webm')) return 'webm'; if (mt.includes('3gpp') || mt.includes('3gp')) return '3gp'; if (mt.includes('mp4') || mt.includes('m4a') || mt.includes('aac')) return 'm4a'; if (mt.includes('wav')) return 'wav'; return this.isCordova() ? '3gp' : 'webm'; })();
             const recordData = { filename: `recording_${Date.now()}.${ext}`, mimeType: this.currentRecording.mimeType, size: this.currentRecording.size, duration: this.currentRecording.duration };
             const savedRecord = window.app.storage.addAudioRecord(recordData);
@@ -310,7 +374,12 @@ class AudioManager {
                 this.hideLoading(); this.showSuccess('Recording saved. Will process when online.');
             }
             this.resetRecordingUI(); this.currentRecording = null; if (window.app?.recordManager) window.app.recordManager.refreshRecordsList();
-        } catch (error) { console.error('[AudioManager] AI send failed:', error); this.hideLoading(); if (error.message?.includes('API key')) this.showError(error.message); else this.showError('Failed to process recording.'); }
+        } catch (error) {
+            console.error('Error sending to AI:', error);
+            this.hideLoading();
+            const msg = (error && error.message) ? error.message : 'Failed to process recording. Please try again.';
+            this.showError(msg);
+        }
     }
 
     getSupportedMimeType() { const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/wav']; for (let t of types) { if (MediaRecorder.isTypeSupported(t)) return { mimeType: t }; } return {}; }
