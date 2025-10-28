@@ -160,81 +160,78 @@ class AudioManager {
         console.log('[AudioManager] Starting Cordova recording...');
         
         try {
-            // Use native media capture (most reliable, handles permissions automatically)
+            // 1) Prefer in-app recording via Cordova Media plugin (stays in our UI)
+            if (typeof Media !== 'undefined') {
+                console.log('[AudioManager] Using Cordova Media (in-app)');
+                const fileName = `calorieai_${Date.now()}.3gp`;
+                this.cordovaAudioPath = (window.cordova?.file?.dataDirectory || '') + fileName;
+
+                this.cordovaMedia = new Media(
+                    this.cordovaAudioPath,
+                    () => console.log('[AudioManager] Media success (callback)'),
+                    (err) => console.error('[AudioManager] Media error:', err)
+                );
+
+                try {
+                    this.cordovaMedia.startRecord();
+                } catch (e) {
+                    console.error('[AudioManager] startRecord threw:', e);
+                    // Fall through to native capture if starting Media fails
+                    this.cordovaMedia.release();
+                    this.cordovaMedia = null;
+                }
+
+                if (this.cordovaMedia) {
+                    this.isRecording = true;
+                    this.recordingStartTime = Date.now();
+                    this.updateRecordingUI();
+                    this.startTimer();
+                    return; // Using in-app recorder successfully
+                }
+            }
+
+            // 2) Fallback: Use native media capture (external UI)
             if (navigator.device?.capture?.captureAudio) {
-                console.log('[AudioManager] Using native media capture');
+                console.log('[AudioManager] Falling back to native media capture');
                 const options = { limit: 1, duration: 3600 };
-                this.isRecording = true; 
-                this.recordingStartTime = Date.now(); 
-                this.updateRecordingUI(); 
+                this.isRecording = true;
+                this.recordingStartTime = Date.now();
+                this.updateRecordingUI();
                 this.startTimer();
-                
                 navigator.device.capture.captureAudio(async (mediaFiles) => {
-                    console.log('[AudioManager] Capture success:', mediaFiles);
                     try {
                         this.stopTimer(); this.isRecording = false; this.updateRecordingUI();
                         if (!mediaFiles?.length) { this.showError('No audio recorded.'); return; }
-                        
                         const info = mediaFiles[0];
                         const src = info.fullPath || info.localURL || info.path;
-                        if (!src) { 
-                            console.error('[AudioManager] No path in capture result:', info); 
-                            this.showError('Could not access recorded audio file.'); 
-                            return; 
-                        }
-                        
-                        const fileEntry = await this.resolveFile(src);
-                        const file = await this.getFile(fileEntry);
+                        if (!src) { this.showError('Could not access recorded audio file.'); return; }
+                        const fe = await this.resolveFile(src);
+                        const file = await this.getFile(fe);
                         const mime = file.type || info.type || 'audio/3gpp';
-                        
-                        this.currentRecording = { 
-                            blob: file, 
-                            mimeType: mime, 
-                            size: file.size, 
-                            duration: this.getRecordingDuration() 
-                        };
-                        
+                        this.currentRecording = { blob: file, mimeType: mime, size: file.size, duration: this.getRecordingDuration() };
                         if (this.elements.recordActions) this.elements.recordActions.style.display = 'flex';
                         if (this.elements.sendBtn) this.elements.sendBtn.disabled = false;
                         this.updateStatus('Recording saved. Click "Send to AI" to process.');
-                        
-                        if (this.autoSendAfterStop) { 
-                            this.autoSendAfterStop = false; 
-                            setTimeout(() => this.sendToAI(), 50); 
-                        }
-                    } catch (e) { 
-                        console.error('[AudioManager] Capture processing error:', e); 
-                        this.showError('Failed to process captured audio.'); 
-                        this.resetRecordingUI(); 
+                        if (this.autoSendAfterStop) { this.autoSendAfterStop = false; setTimeout(() => this.sendToAI(), 50); }
+                    } catch (e) {
+                        console.error('[AudioManager] capture processing error:', e);
+                        this.showError('Failed to process captured audio.');
+                        this.resetRecordingUI();
                     }
                 }, (error) => {
                     console.error('[AudioManager] Capture error:', error);
                     this.stopTimer(); this.isRecording = false; this.resetRecordingUI();
-                    const msg = (error?.code === 3) ? 'Recording canceled.' : 
-                                'Failed to start recorder. Check Settings → Apps → CalorieAI → Permissions → Microphone.';
+                    const msg = (error?.code === 3) ? 'Recording canceled.' : 'Failed to start recorder. Check microphone permission.';
                     this.showError(msg);
                 }, options);
                 return;
             }
 
-            // Fallback: Direct Media plugin recording
-            console.log('[AudioManager] Using Media plugin fallback');
-            const fileName = `calorieai_${Date.now()}.3gp`;
-            this.cordovaAudioPath = (window.cordova?.file?.dataDirectory || '') + fileName;
-            
-            this.cordovaMedia = new Media(this.cordovaAudioPath, 
-                () => console.log('[AudioManager] Media success'),
-                (err) => console.error('[AudioManager] Media error:', err)
-            );
-            
-            this.cordovaMedia.startRecord();
-            this.isRecording = true; 
-            this.recordingStartTime = Date.now(); 
-            this.updateRecordingUI(); 
-            this.startTimer();
+            // 3) If neither Media nor capture is available
+            this.showError('Recording is not available on this device.');
         } catch (error) {
             console.error('[AudioManager] Cordova recording start failed:', error);
-            this.showError('Recording failed. Enable microphone in Settings → Apps → CalorieAI → Permissions.');
+            this.showError('Failed to start recording.');
         }
     }
 
@@ -255,7 +252,12 @@ class AudioManager {
     stopRecording() {
         if (!this.isRecording) return;
         if (this.isCordova() && this.cordovaMedia) {
-            this.cordovaMedia.stopRecord(); this.isRecording = false; this.stopTimer(); this.updateRecordingUI(); this.cordovaMedia.release(); this.processCordovaRecording();
+            // In-app Media path
+            try { this.cordovaMedia.stopRecord(); } catch (e) { console.warn('[AudioManager] stopRecord error:', e); }
+            this.isRecording = false; this.stopTimer(); this.updateRecordingUI();
+            // Delay processing slightly to ensure file is flushed
+            setTimeout(() => { try { this.cordovaMedia.release(); } catch {} this.processCordovaRecording(); }, 150);
+            return;
         } else if (this.isCordova() && !this.cordovaMedia) {
             this.showError('Recording is running in the native recorder. Stop it using the system UI.'); return;
         } else if (this.mediaRecorder) {
