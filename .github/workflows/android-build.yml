@@ -2,7 +2,9 @@ name: Android APK (Cordova)
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -31,13 +33,14 @@ jobs:
 
       - name: Build Cordova Android (no web overwrite)
         working-directory: calorieai-android
+        shell: bash
         run: |
-          npm ci || true
+          # Ensure platform is present
           cordova platform add android@14 --no-save || true
+          # Explicitly add local AAC plugin before build (defensive)
+          cordova plugin add file:plugins/cordova-plugin-aac-recorder || true
           cordova plugin list
-          # Guard: ensure we are not copying web/ into www
-          if [ -d "../web" ]; then echo "Guard: Skipping any sync from web/"; fi
-          # Build debug APK by default
+          echo "Guard: Skipping any sync from web/"
           cordova build android --debug
 
       - name: Upload APK artifact
