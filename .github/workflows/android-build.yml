@@ -38,7 +38,7 @@ jobs:
           # Ensure platform is present
           cordova platform add android@14 --no-save || true
           # Explicitly add local AAC plugin before build (defensive)
-          cordova plugin add file:plugins/cordova-plugin-aac-recorder || true
+          cordova plugin add file:local-plugins/cordova-plugin-aac-recorder || true
           cordova plugin list
           echo "Guard: Skipping any sync from web/"
           cordova build android --debug

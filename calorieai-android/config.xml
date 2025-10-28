@@ -41,5 +41,5 @@
     <!-- Required Cordova Plugins -->
     <plugin name="cordova-plugin-android-permissions" spec="^1.1.5" />
     <plugin name="cordova-plugin-file" spec="^8.0.0" />
-    <plugin name="cordova-plugin-aac-recorder" spec="file:plugins/cordova-plugin-aac-recorder" />
+    <plugin name="cordova-plugin-aac-recorder" spec="file:local-plugins/cordova-plugin-aac-recorder" />
 </widget>

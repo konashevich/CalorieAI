@@ -1,0 +1,10 @@
+{
+  "name": "cordova-plugin-aac-recorder",
+  "version": "1.0.0",
+  "description": "Lightweight in-app AAC (ADTS) recorder for Cordova Android",
+  "cordova": { "id": "cordova-plugin-aac-recorder", "platforms": ["android"] },
+  "keywords": ["cordova", "plugin", "audio", "aac", "recorder", "android"],
+  "engines": [ { "name": "cordova", "version": ">=10" }, { "name": "cordova-android", "version": ">=10" } ],
+  "author": "CalorieAI",
+  "license": "Apache-2.0"
+}
