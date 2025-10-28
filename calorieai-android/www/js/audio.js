@@ -9,6 +9,8 @@ class AudioManager {
         this.currentFile = null; // { filePath, mimeType, duration, sizeBytes }
         this.autoSendAfterStop = false;
         this.deviceReady = false;
+        // Prevent duplicate stop/send when user taps rapidly
+        this.isStopping = false;
 
         this.elements = {
             recordBtn: document.getElementById('recordBtn'),
@@ -38,8 +40,18 @@ class AudioManager {
         if (this.elements.stopBtn) this.elements.stopBtn.addEventListener('click', () => this.stopRecording());
         if (this.elements.sendBtn) {
             this.elements.sendBtn.addEventListener('click', () => {
-                if (this.isRecording) { this.autoSendAfterStop = true; this.updateStatus('Stopping and sending to AI...'); this.stopRecording(); }
-                else { this.sendToAI(); }
+                // If currently recording, auto-stop and then send
+                if (this.isRecording) {
+                    if (this.isStopping) return; // guard against rapid taps
+                    this.isStopping = true;
+                    this.autoSendAfterStop = true;
+                    // Disable send to prevent multiple triggers while stopping
+                    this.elements.sendBtn.disabled = true;
+                    this.updateStatus('Stopping and sending to AI...');
+                    this.stopRecording();
+                } else {
+                    this.sendToAI();
+                }
             });
         }
     }
@@ -68,6 +80,7 @@ class AudioManager {
             if (!ok) { this.showError('Microphone permission required. Grant it to record.'); return; }
             const res = await window.AACRecorder.start({ maxSeconds: 3600 });
             this.isRecording = true;
+            this.isStopping = false; // reset any previous stopping state
             this.recordingStartTime = Date.now();
             this.currentFile = { filePath: res.filePath, mimeType: res.mimeType || 'audio/aac' };
             this.updateRecordingUI();
@@ -88,12 +101,16 @@ class AudioManager {
             this.updateRecordingUI();
             this.currentFile = { filePath: res.filePath, mimeType: res.mimeType || 'audio/aac', duration: Math.floor((res.durationMs||0)/1000), sizeBytes: res.sizeBytes||0 };
             if (this.elements.recordActions) this.elements.recordActions.style.display = 'flex';
-            if (this.elements.sendBtn) this.elements.sendBtn.disabled = false;
+            if (this.elements.sendBtn) {
+                // Keep disabled if auto-send is queued, otherwise enable for manual send
+                this.elements.sendBtn.disabled = !!this.autoSendAfterStop;
+            }
             this.updateStatus('Recording saved. Click "Send to AI" to process.');
-            if (this.autoSendAfterStop) { this.autoSendAfterStop = false; setTimeout(() => this.sendToAI(), 50); }
+            if (this.autoSendAfterStop) { this.autoSendAfterStop = false; const wasStopping = this.isStopping; this.isStopping = false; setTimeout(() => this.sendToAI(), 50); }
         } catch (e) {
             console.error('[AudioManager] stop failed', e);
             this.isRecording = false;
+            this.isStopping = false;
             this.stopTimer();
             this.resetRecordingUI();
             this.showError('Failed to stop recording.');
@@ -150,7 +167,8 @@ class AudioManager {
             if (this.elements.recordingTimer) this.elements.recordingTimer.style.display = 'block';
             if (this.elements.recordingStatus) this.elements.recordingStatus.style.display = 'block';
             if (this.elements.recordActions) this.elements.recordActions.style.display = 'flex';
-            if (this.elements.sendBtn) this.elements.sendBtn.disabled = true;
+            // Allow one-tap send during recording: enable the Send button
+            if (this.elements.sendBtn) this.elements.sendBtn.disabled = false;
         } else {
             this.elements.recordBtn.classList.remove('recording');
             this.elements.recordBtn.innerHTML = '<span class="record-icon">🎙️</span>';
