@@ -392,6 +392,14 @@ class RecordManager {
     refreshRecordsList() {
         if (!this.recordsList) return;
 
+        // Prune selection: only keep non-transcribed records from today
+        const today = new Date().toISOString().split('T')[0];
+        const all = this.storage.getAudioRecords();
+        const validIds = new Set(
+            all.filter(r => !r.transcribed && r.recordedDate === today).map(r => r.id)
+        );
+        this.selectedRecords.forEach(id => { if (!validIds.has(id)) this.selectedRecords.delete(id); });
+
         const records = this.storage.getAudioRecords();
         
         if (records.length === 0) {
@@ -474,7 +482,8 @@ class RecordManager {
         const isComplete = this.isRecordComplete(record);
         const dateShort = this.formatShortDate(record.recordedDate);
         const isSelected = this.selectedRecords.has(record.id);
-        const canSelect = !hasTranscription; // Only non-transcribed can be selected
+        // Only non-transcribed AND today can be selected for batch
+        const canSelect = !hasTranscription && record.recordedDate === new Date().toISOString().split('T')[0];
 
         return `
             <div class="record-item ${isSelected ? 'selected' : ''}" data-record-id="${record.id}" 
@@ -493,7 +502,7 @@ class RecordManager {
                         <path d="M4 2v12l9-6z"/>
                     </svg>
                 </button>
-                <span class="record-text" title="${preview.replace(/"/g, '&quot;')}">${preview || 'Not transcribed yet'}</span>
+                <span class="record-text" title="${preview.replace(/\"/g, '&quot;')}">${preview || (hasTranscription ? 'Transcribed' : 'Queued') }</span>
                 <button class="btn-icon" onclick="event.stopPropagation(); if(confirm('Delete this recording? This action cannot be undone.')) window.app.recordManager.deleteRecord('${record.id}')" title="Delete" aria-label="Delete">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
                         <path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0v-6a.5.5 0 0 1 .5-.5z"/>
@@ -558,7 +567,15 @@ class RecordManager {
     }
 
     deleteRecord(recordId) {
+        // Delete blob from IndexedDB as well
+        try {
+            if (window.app?.pwa?.indexedDB) {
+                window.app.pwa.indexedDB.deleteAudioFile(recordId).catch(console.warn);
+            }
+        } catch (e) { console.warn('Failed to delete blob for record', recordId, e); }
         this.storage.deleteAudioRecord(recordId);
+        // Also unselect if selected
+        this.selectedRecords.delete(recordId);
         this.refreshRecordsList();
     }
 
@@ -807,6 +824,14 @@ class RecordManager {
     }
 
     toggleRecordSelection(recordId) {
+        // Enforce selection limited to today and non-transcribed
+        const rec = this.storage.getAudioRecord(recordId);
+        const today = new Date().toISOString().split('T')[0];
+        if (!rec || rec.transcribed || rec.recordedDate !== today) {
+            // Safety: ignore selection if not allowed
+            window.app?.showToast?.('Only today\'s unsent recordings can be batch-sent', 'info');
+            return;
+        }
         if (this.selectedRecords.has(recordId)) {
             this.selectedRecords.delete(recordId);
         } else {
@@ -823,7 +848,7 @@ class RecordManager {
             bar.className = 'batch-selection-bar';
             bar.innerHTML = `
                 <span id="selectionCount">0 selected</span>
-                <button id="sendAllBtn" class="action-btn primary">Send All to AI</button>
+                <button id="sendAllBtn" class="action-btn primary">Send to AI</button>
                 <button id="clearSelectionBtn" class="action-btn secondary">Clear</button>
             `;
             const recordsSection = document.querySelector('.records-section');
@@ -859,10 +884,22 @@ class RecordManager {
     async batchSendToAI() {
         if (this.selectedRecords.size === 0) return;
 
+        const today = new Date().toISOString().split('T')[0];
+        // Filter to only today & not transcribed (defensive)
         const recordIds = Array.from(this.selectedRecords);
-        const records = this.storage.getAudioRecords().filter(r => recordIds.includes(r.id));
+        const candidates = this.storage.getAudioRecords().filter(r => recordIds.includes(r.id) && !r.transcribed && r.recordedDate === today);
 
-        if (!confirm(`Send ${records.length} recording(s) to AI for processing?`)) {
+        if (candidates.length === 0) {
+            window.app?.showToast?.('No eligible recordings selected', 'info');
+            return;
+        }
+
+        if (!navigator.onLine) {
+            window.app?.showToast?.('You are offline. Batch send requires internet.', 'error');
+            return;
+        }
+
+        if (!confirm(`Send ${candidates.length} recording(s) to AI for processing?`)) {
             return;
         }
 
@@ -871,38 +908,49 @@ class RecordManager {
             const overlay = document.getElementById('loadingOverlay');
             const loadingText = document.querySelector('.loading-text');
             if (overlay) overlay.classList.add('show');
-            if (loadingText) loadingText.textContent = `Processing 0 of ${records.length}...`;
+            if (loadingText) loadingText.textContent = `Processing 0 of ${candidates.length}...`;
 
             const aiManager = this.getAIManager();
-            const audioDataArray = records.map(record => ({
-                blob: record.blob,
-                mimeType: record.mimeType || 'audio/webm',
-                recordId: record.id
-            }));
 
-            const batchResult = await aiManager.processBatchAudio(audioDataArray);
-
-            // Update records with results
             let successCount = 0;
-            for (let i = 0; i < batchResult.results.length; i++) {
-                const result = batchResult.results[i];
-                const record = records[i];
+            for (let i = 0; i < candidates.length; i++) {
+                const record = candidates[i];
+                if (loadingText) loadingText.textContent = `Processing ${i + 1} of ${candidates.length}...`;
 
-                if (loadingText) loadingText.textContent = `Processing ${i + 1} of ${records.length}...`;
+                // Retrieve audio blob from IndexedDB
+                let audioEntry = null;
+                try {
+                    audioEntry = await window.app?.pwa?.indexedDB?.getAudioFile(record.id);
+                } catch (e) {
+                    console.error('Failed to load audio blob for', record.id, e);
+                }
+                if (!audioEntry || !audioEntry.blob) {
+                    console.warn('Missing audio blob for record', record.id);
+                    continue;
+                }
 
-                if (result.success) {
+                const audioData = {
+                    blob: audioEntry.blob,
+                    mimeType: audioEntry.type || record.mimeType || 'audio/webm',
+                    recordId: record.id
+                };
+
+                try {
+                    const aiResponse = await aiManager.processAudio(audioData);
                     // Update record with transcription
                     this.storage.updateAudioRecord(record.id, {
                         transcribed: true,
-                        transcriptionData: JSON.stringify(result.data)
+                        transcriptionData: JSON.stringify(aiResponse)
                     });
 
                     // Handle AI response and save to appropriate storage
                     if (aiManager.handleAIResponse) {
-                        await aiManager.handleAIResponse(result.data, record.id);
+                        await aiManager.handleAIResponse(aiResponse, record.id);
                     }
 
                     successCount++;
+                } catch (err) {
+                    console.error('AI processing failed for', record.id, err);
                 }
             }
 
@@ -919,10 +967,10 @@ class RecordManager {
             }
 
             // Show result toast
-            const errorCount = records.length - successCount;
-            let message = `Processed ${successCount} of ${records.length} recordings`;
+            const errorCount = candidates.length - successCount;
+            let message = `Processed ${successCount} of ${candidates.length} recordings`;
             if (errorCount > 0) {
-                message += ` (${errorCount} failed)`;
+                message += ` (${errorCount} failed or missing audio)`;
             }
             window.app?.showToast(message, errorCount > 0 ? 'error' : 'success', 5000);
 

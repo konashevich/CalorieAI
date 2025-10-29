@@ -14,6 +14,9 @@ class AudioManager {
         this.recordingStartTime = null;
         this.microphonePermission = false;
         
+        // Track persisted record id to avoid duplicate metadata entries
+        this.currentRecordId = null;
+        
         this.elements = {
             recordBtn: document.getElementById('recordBtn'),
             stopBtn: document.getElementById('stopBtn'),
@@ -119,6 +122,8 @@ class AudioManager {
             
             this.audioChunks = [];
             this.recordingStartTime = Date.now();
+            // Reset persisted record id for new session
+            this.currentRecordId = null;
 
             // Event handlers
             this.mediaRecorder.ondataavailable = (event) => {
@@ -188,6 +193,9 @@ class AudioManager {
                 duration: this.getRecordingDuration()
             };
 
+            // Persist immediately so the item appears in the list even if user doesn't send
+            await this.ensureRecordingPersisted();
+
             // Show record actions and enable send button
             if (this.elements.recordActions) {
                 this.elements.recordActions.style.display = 'flex';
@@ -198,7 +206,7 @@ class AudioManager {
             }
 
             // Update status
-            this.updateStatus('Recording saved. Click "Send to AI" to process.');
+            this.updateStatus('Recording saved. Tap "Send to AI" now or later.');
 
             // If user clicked Send while recording, auto-send now
             if (this.autoSendAfterStop) {
@@ -213,17 +221,13 @@ class AudioManager {
         }
     }
 
-    async sendToAI() {
-        if (!this.currentRecording) {
-            this.showError('No recording to send. Please record audio first.');
-            return;
-        }
-
+    // Persist current recording metadata + blob if not yet saved
+    async ensureRecordingPersisted() {
         try {
-            // Show loading
-            this.showLoading('Processing with AI...');
+            if (!this.currentRecording) return;
+            // If already persisted, nothing to do
+            if (this.currentRecordId) return;
 
-            // Save to storage first (metadata in localStorage)
             const recordData = {
                 filename: `recording_${Date.now()}.webm`,
                 mimeType: this.currentRecording.mimeType,
@@ -231,12 +235,14 @@ class AudioManager {
                 duration: this.currentRecording.duration
             };
 
+            // Save metadata to localStorage
             const savedRecord = window.app.storage.addAudioRecord(recordData);
+            this.currentRecordId = savedRecord.id;
 
             // Save audio blob to IndexedDB
             if (window.app.pwa && window.app.pwa.indexedDB) {
                 await window.app.pwa.indexedDB.storeAudioFile(
-                    savedRecord.id, 
+                    savedRecord.id,
                     this.currentRecording.blob,
                     {
                         filename: recordData.filename,
@@ -245,6 +251,30 @@ class AudioManager {
                 );
             }
 
+            // Refresh records list so user sees the new entry
+            if (window.app && window.app.recordManager) {
+                window.app.recordManager.refreshRecordsList();
+            }
+        } catch (e) {
+            console.error('Failed to persist recording:', e);
+        }
+    }
+
+    async sendToAI() {
+        if (!this.currentRecording) {
+            this.showError('No recording to send. Please record audio first.');
+            return;
+        }
+
+        try {
+            // Ensure we have metadata persisted and an id
+            await this.ensureRecordingPersisted();
+
+            // Show loading
+            this.showLoading('Processing with AI...');
+
+            const recordId = this.currentRecordId;
+
             // Send to AI service (check if online)
             if (navigator.onLine) {
                 // Process with AI
@@ -252,13 +282,13 @@ class AudioManager {
                 const aiResponse = await aiManager.processAudio(this.currentRecording);
                 
                 // Update record with transcription
-                window.app.storage.updateAudioRecord(savedRecord.id, {
+                window.app.storage.updateAudioRecord(recordId, {
                     transcribed: true,
                     transcriptionData: JSON.stringify(aiResponse)
                 });
 
                 // Handle AI response (save to appropriate storage)
-                await aiManager.handleAIResponse(aiResponse, savedRecord.id);
+                await aiManager.handleAIResponse(aiResponse, recordId);
 
                 this.hideLoading();
                 this.showSuccess('Recording processed and saved!');
@@ -267,8 +297,9 @@ class AudioManager {
                 if (window.app.pwa && window.app.pwa.indexedDB) {
                     await window.app.pwa.indexedDB.queueOfflineRequest({
                         type: 'ai-transcription',
-                        recordId: savedRecord.id,
-                        audioBlob: this.currentRecording.blob
+                        recordId: recordId,
+                        // We cannot store Blob in SW queue reliably; ensure it's already in IndexedDB
+                        note: 'Audio blob stored in IndexedDB under recordId'
                     });
                 }
 
@@ -278,6 +309,7 @@ class AudioManager {
 
             this.resetRecordingUI();
             this.currentRecording = null;
+            this.currentRecordId = null;
             
             // Refresh records list
             if (window.app && window.app.recordManager) {
