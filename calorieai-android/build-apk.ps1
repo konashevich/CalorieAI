@@ -28,6 +28,123 @@ function Run-Cmd($command, [switch]$IgnoreExitCode) {
     if (-not $IgnoreExitCode -and $code -ne 0) { throw "Command failed ($code): $command" }
 }
 
+function Resolve-JavaHome {
+    # 1. Check if JAVA_HOME is already set and points to a valid directory with javac.exe
+    if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME "bin\javac.exe"))) {
+        Write-Ok "JAVA_HOME is already set to: $env:JAVA_HOME"
+        return $true
+    }
+
+    # 2. Search for Android Studio's bundled JDK (jbr)
+    $studioPath = Join-Path $env:ProgramFiles "Android\Android Studio"
+    if (Test-Path $studioPath) {
+        $jbrPath = Join-Path $studioPath "jbr"
+        if (Test-Path (Join-Path $jbrPath "bin\javac.exe")) {
+            Write-Info "Found Android Studio bundled JDK: $jbrPath"
+            $env:JAVA_HOME = $jbrPath
+            Write-Ok "JAVA_HOME configured for this session."
+            return $true
+        }
+    }
+    
+    # 3. If running from JetBrains Toolbox
+    $toolboxAppDir = Join-Path $env:LOCALAPPDATA "JetBrains\Toolbox\apps\AndroidStudio"
+    if (Test-Path $toolboxAppDir) {
+        # Get the latest version directory
+        $latestVersion = Get-ChildItem $toolboxAppDir | Sort-Object Name -Descending | Select-Object -First 1
+        if ($latestVersion) {
+            $jbrPath = Join-Path $latestVersion.FullName "jbr"
+            if (Test-Path (Join-Path $jbrPath "bin\javac.exe")) {
+                Write-Info "Found Android Studio (Toolbox) bundled JDK: $jbrPath"
+                $env:JAVA_HOME = $jbrPath
+                Write-Ok "JAVA_HOME configured for this session."
+                return $true
+            }
+        }
+    }
+
+    # 4. Search common "Program Files" locations for other JDKs
+    $javaBaseDir = Join-Path $env:ProgramFiles "Java"
+    if (Test-Path $javaBaseDir) {
+        # Find the latest installed JDK
+        $latestJdk = Get-ChildItem $javaBaseDir -Directory | Where-Object { $_.Name -like "jdk*" } | Sort-Object Name -Descending | Select-Object -First 1
+        if ($latestJdk) {
+            $jdkPath = $latestJdk.FullName
+             if (Test-Path (Join-Path $jdkPath "bin\javac.exe")) {
+                Write-Info "Found JDK in Program Files: $jdkPath"
+                $env:JAVA_HOME = $jdkPath
+                Write-Ok "JAVA_HOME configured for this session."
+                return $true
+            }
+        }
+    }
+
+    Write-Info "Could not automatically find JAVA_HOME."
+    return $false
+}
+
+function Resolve-AndroidHome {
+    $localProps = "local.properties"
+    if (Test-Path $localProps) {
+        # Find sdk.dir, get value after '=', and trim whitespace
+        $sdkDir = Get-Content $localProps | Where-Object { $_ -match "^\s*sdk\.dir\s*=" } | ForEach-Object {
+            ($_ -split "=", 2)[1].Trim()
+        }
+
+        if ($sdkDir) {
+            # On Windows, paths in local.properties often use escaped backslashes. e.g. C\:\\Users\\...
+            $sdkDir = $sdkDir -replace '\\\\', '\' -replace '\\:', ':'
+            if (Test-Path $sdkDir) {
+                Write-Info "Found Android SDK path in local.properties: $sdkDir"
+                $env:ANDROID_HOME = $sdkDir
+                # Cordova checks for platform-tools and cmdline-tools, so add them to PATH
+                $platformTools = Join-Path $sdkDir "platform-tools"
+                $cmdlineTools = Join-Path $sdkDir "cmdline-tools\latest\bin" # newer structure
+                $tools = Join-Path $sdkDir "tools\bin" # older structure
+
+                if(Test-Path $platformTools) { $env:PATH = "$platformTools;$env:PATH" }
+                if(Test-Path $cmdlineTools) { $env:PATH = "$cmdlineTools;$env:PATH" }
+                if(Test-Path $tools) { $env:PATH = "$tools;$env:PATH" }
+
+                Write-Ok "ANDROID_HOME and PATH configured for this session."
+                return $true
+            } else {
+                Write-Err "local.properties found, but the sdk.dir path is invalid: '$sdkDir'"
+            }
+        }
+    }
+    # Write-Info "local.properties not found or doesn't contain sdk.dir. Relying on existing environment variables."
+    return $false
+}
+
+function Resolve-Gradle {
+    # 1. Check if gradle is already in PATH
+    if (Test-CommandExists "gradle") {
+        Write-Ok "Gradle is already in PATH."
+        return $true
+    }
+
+    # 2. Search for a Gradle distribution downloaded by the wrapper (most reliable method)
+    $gradleDists = Join-Path $env:USERPROFILE ".gradle\wrapper\dists"
+    if (Test-Path $gradleDists) {
+        # Find the newest gradle-*/bin directory
+        $gradleBinPath = Get-ChildItem -Path $gradleDists -Recurse -Directory -Filter "bin" -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path (Join-Path $_.FullName "gradle.bat") } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        
+        if ($gradleBinPath) {
+            Write-Info "Found Gradle distribution in user profile: $($gradleBinPath.FullName)"
+            $env:PATH = "$($gradleBinPath.FullName);$env:PATH"
+            Write-Ok "Gradle added to PATH for this session."
+            return $true
+        }
+    }
+
+    Write-Info "Could not automatically find a Gradle installation. Cordova may still work if the project's Gradle wrapper is already present."
+    return $false
+}
+
 function Ensure-Npm {
     if (-not (Test-CommandExists node)) { throw "Node.js is not installed or not in PATH." }
     if (-not (Test-CommandExists npm))  { throw "npm is not installed or not in PATH." }
@@ -147,7 +264,8 @@ function Build-Release {
 function Clean-RebuildPlatform {
     Write-Info "Cleaning Android platform..."
     if (Test-Path "platforms\android") { Run-Cmd "npx cordova platform remove android" -IgnoreExitCode }
-    Ensure-AndroidPlatform
+    Write-Info "Adding latest Android platform (cordova-android@latest) to ensure a clean build..."
+    Run-Cmd "npx cordova platform add android@latest"
     Ensure-Prepare
     Write-Ok "Clean complete."
 }
@@ -157,6 +275,9 @@ function Clean-RebuildPlatform {
 # ---------------------------
 Write-Title "CalorieAI Android APK Build Script"
 Assert-InProjectRoot
+$null = Resolve-AndroidHome # Set ANDROID_HOME if possible
+$null = Resolve-JavaHome    # Set JAVA_HOME if possible
+$null = Resolve-Gradle      # Add Gradle to PATH if possible
 
 Write-Host "Select build type:" -ForegroundColor Yellow
 Write-Host "1. Debug APK (unsigned, for testing)"
