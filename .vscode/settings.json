@@ -1,0 +1,10 @@
+{
+  "git.alwaysSignOff": false,
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "git.enableSmartCommit": true,
+  "git.smartCommitChanges": "all",
+  "git.postCommitCommand": "push",
+  "git.enableCommitSigning": false,
+  "files.autoSave": "onFocusChange"
+}
