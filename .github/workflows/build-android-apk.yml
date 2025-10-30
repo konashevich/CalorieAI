@@ -3,10 +3,6 @@ name: Build Android APK
 on:
   push:
     branches: [ main, develop ]
-    paths:
-      - 'calorieai-android/**'
-      - 'web/**'
-      - '.github/workflows/build-android-apk.yml'
   pull_request:
     branches: [ main ]
   workflow_dispatch:  # Allows manual trigger from GitHub Actions tab
